@@ -31,11 +31,6 @@ Langages : Python, SQL, Pyspark
 
 ## Cloud Architecture: Why ?
 
-- No need to pay for cloud services, solution cheap with free tools
-- Stay in control of your infrastructure
-- Keep data under control and stay sovereign
-- Great for a first project in a small/medium enterprise 
-- Can be used as a Proof-of-concept before migration to cloud
 
 
 # Evaluation metrics:
@@ -49,7 +44,6 @@ The project is developed in the cloud and IaC tools are used
 Batch / Workflow orchestration:
 End-to-end pipeline: multiple steps in the DAG, uploading data to data lake
 
-
 Data warehouse
 Tables are partitioned and clustered in a way that makes sense for the upstream queries (with explanation)
 
@@ -61,3 +55,6 @@ A dashboard with 2 tiles
 
 Reproducibility
 Instructions are clear, it's easy to run the code, and the code works
+
+
+Da

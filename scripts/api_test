@@ -1,0 +1,16 @@
+import requests
+import pandas as pd
+from io import StringIO
+
+# Define API query URL (CSV with labels format)
+url_data = "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NAAG@DF_NAAG_V,1.0/A.EA+EU+WXOECD+ZAF+BRA+CHN+IDN+RUS+AUS+AUT+BEL+CAN+CHL+COL+CRI+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LVA+LTU+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA.B7GS1M_POP+B7N_R_GR+B6N_R_PPP_P31S14+B6N_R_PPP_P31S14_GR+B7N_R_PPP_P41+B7N_R_PPP_P41_GR+B8NS1M+P31S1M_CP04+LES1M_FAS_POP+LES1M_NN_POP+LES1M_FD4+LES1M_BF90_POP+LES1M_B90+FS1M_B9F+LES1M_F2AS+LES1M_F3AS+LES1M_F51AS+LES1M_F52AS+LES1M_F62AS+LES1M_F6MAS+LES1M_N111N_POP+LES1M_N211N_POP+LES1M_NKN_POP+B6GS1M_POP.USD_PPP_PS.?startPeriod=2000&dimensionAtObservation=AllDimensions"
+url_structure = "https://sdmx.oecd.org/public/rest/dataflow/OECD.SDD.NAD/DSD_NAAG@DF_NAAG_V/1.0?references=all"
+# Fetch data
+response = requests.get(url)
+
+# Load into pandas DataFrame
+df = pd.read_csv(StringIO(response.text))
+
+# Display first few rows
+print(df.head())
+

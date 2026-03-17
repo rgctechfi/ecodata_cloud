@@ -1,8 +1,0 @@
-https://www.oecd.org/fr/data/datasets/gdp-and-non-financial-accounts.html
-
-Le produit intérieur brut (PIB) mesure la croissance économique des pays et est l'indicateur le plus connu des comptes nationaux. Les comptes non financiers fournissent des informations détaillées pour chaque économie, y compris des mesures de la production, des revenus, de la consommation, de l'épargne et des emprunts.
-
-Le produit intérieur brut (PIB) est l'indicateur le plus connu des comptes nationaux. Il mesure la production totale de l'économie d'un pays. La mesure du PIB par la « production » est calculée comme la somme des valeurs ajoutées brutes de chaque secteur de l'économie. Par définition, le PIB est également égal à la valeur des revenus tirés de cette activité (mesure du PIB par les « revenus ») et au montant total dépensé en biens et services finaux par les résidents et les non-résidents, moins la valeur des importations (mesure du PIB par la « dépense » ou « demande finale »). Les trois mesures donnent le même chiffre pour une période donnée. Les comptes sont élaborés conformément aux normes internationales du Système de comptabilité nationale (SCN) 2008.
-
-Le PIB n'est que l'un des nombreux indicateurs des comptes nationaux. Pour ceux qui souhaitent aller "au-delà du PIB" afin de dresser un tableau plus complet du bien-être économique des personnes, les comptes non financiers contiennent des indicateurs pour le secteur des ménages tels que le revenu disponible (y compris les pensions et autres prestations sociales), la valeur des services de santé et d'éducation, ainsi que des mesures de la consommation, de l'épargne et l’endettement. Ils fournissent également une analyse de l’investissement des entreprises, de la valeur ajoutée et de la productivité.
-
