@@ -56,5 +56,4 @@ A dashboard with 2 tiles
 Reproducibility
 Instructions are clear, it's easy to run the code, and the code works
 
-
-Da
+# Read the CONTEXT.md to understand important things
