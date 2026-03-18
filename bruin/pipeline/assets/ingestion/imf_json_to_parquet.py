@@ -1,0 +1,177 @@
+"""@bruin
+
+name: ingestion.imf_json_to_parquet
+
+type: python
+
+image: python:3.11
+
+@bruin"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+
+
+def resolve_project_root() -> Path:
+    # Support running the asset from the repo root or from the bruin pipeline folder.
+    candidates = [
+        Path.cwd(),
+        Path.cwd().parent,
+        Path(__file__).resolve().parents[4],
+    ]
+    for candidate in candidates:
+        if (candidate / "data" / "raw").exists():
+            return candidate
+    return candidates[-1]
+
+
+def normalize_values_payload(values: dict) -> pd.DataFrame:
+    rows = []
+    for indicator, country_map in values.items():
+        if not isinstance(country_map, dict):
+            rows.append(
+                {
+                    "indicator": indicator,
+                    "country": None,
+                    "year": None,
+                    "value": country_map,
+                }
+            )
+            continue
+
+        for country, series in country_map.items():
+            if isinstance(series, dict):
+                for year, value in series.items():
+                    rows.append(
+                        {
+                            "indicator": indicator,
+                            "country": country,
+                            "year": year,
+                            "value": value,
+                        }
+                    )
+            else:
+                rows.append(
+                    {
+                        "indicator": indicator,
+                        "country": country,
+                        "year": None,
+                        "value": series,
+                    }
+                )
+
+    frame = pd.DataFrame(rows)
+    if not frame.empty:
+        frame["year"] = pd.to_numeric(frame["year"], errors="coerce").astype("Int64")
+        frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
+    return frame
+
+
+def normalize_countries_payload(countries: dict) -> pd.DataFrame:
+    rows = []
+    for country_code, payload in countries.items():
+        row = {"country": country_code}
+        if isinstance(payload, dict):
+            row.update(payload)
+        else:
+            row["label"] = payload
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def payload_to_frame(payload: object) -> pd.DataFrame:
+    if isinstance(payload, dict) and "values" in payload and isinstance(payload["values"], dict):
+        return normalize_values_payload(payload["values"])
+
+    if isinstance(payload, dict) and "countries" in payload and isinstance(payload["countries"], dict):
+        return normalize_countries_payload(payload["countries"])
+
+    if isinstance(payload, list):
+        return pd.json_normalize(payload)
+
+    if isinstance(payload, dict):
+        return pd.json_normalize(payload)
+
+    return pd.DataFrame([{"value": payload}])
+
+
+def convert_json_to_parquet() -> pd.DataFrame:
+    project_root = resolve_project_root()
+    data_raw = project_root / "data" / "raw"
+    data_parquet = project_root / "data" / "parquet"
+    json_files = sorted(data_raw.rglob("*.json"))
+
+    columns = [
+        "run_at",
+        "json_path",
+        "parquet_path",
+        "status",
+        "row_count",
+        "column_count",
+        "bytes",
+        "error",
+    ]
+
+    if not json_files:
+        return pd.DataFrame(columns=columns)
+
+    run_at = pd.Timestamp.now(tz="UTC").tz_localize(None)
+    logs = []
+
+    for json_path in json_files:
+        parquet_path = data_parquet / json_path.relative_to(data_raw)
+        parquet_path = parquet_path.with_suffix(".parquet")
+
+        try:
+            payload = json.loads(json_path.read_text())
+            frame = payload_to_frame(payload)
+
+            parquet_path.parent.mkdir(parents=True, exist_ok=True)
+            frame.to_parquet(parquet_path, index=False)
+
+            size_bytes = parquet_path.stat().st_size
+            logs.append(
+                {
+                    "run_at": run_at,
+                    "json_path": str(json_path),
+                    "parquet_path": str(parquet_path),
+                    "status": "ok",
+                    "row_count": int(frame.shape[0]),
+                    "column_count": int(frame.shape[1]),
+                    "bytes": int(size_bytes),
+                    "error": None,
+                }
+            )
+        except Exception as exc:
+            logs.append(
+                {
+                    "run_at": run_at,
+                    "json_path": str(json_path),
+                    "parquet_path": str(parquet_path),
+                    "status": "error",
+                    "row_count": None,
+                    "column_count": None,
+                    "bytes": None,
+                    "error": str(exc),
+                }
+            )
+
+    logs_frame = pd.DataFrame(logs, columns=columns)
+    log_dir = data_parquet / "_logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "imf_json_to_parquet_log.csv"
+    logs_frame.to_csv(log_path, index=False)
+    print(f"Wrote parquet files to: {data_parquet}")
+    print(f"Wrote conversion log to: {log_path}")
+    return logs_frame
+
+convert_json_to_parquet()
+
+"""
+Launch json to parquet:
+bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py
+"""

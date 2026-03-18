@@ -18,3 +18,20 @@ wheels/
 # Files
 *.parquet
 *.csv
+.bruin.yml
+logs/runs
+logs/*.log
+*.py[cod]
+
+# Project data (keep docs only)
+data/raw/**
+!data/raw/context.md
+data/parquet/**
+
+# GCP credentials
+**/application_default_credentials.json
+**/credentials*.json
+**/gcp*.json
+**/service-account*.json
+.gcloud/
+.config/gcloud/

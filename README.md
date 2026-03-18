@@ -1,11 +1,12 @@
 The command are MacOS/Linux ready, not for Windows.
-
+The project is a foundation for a big project where the goal is to aggregate economical values
 
 generate a picture of the project
 
-# insert map of 2 solutions
-- on premise
-- local
+# insert map of solution
+- cloud
+
+- parquet is not mandatory for this size of data but I think scalable, and later the project could be bigger.
 
 Solution requierements :
 - Selecting a dataset :
