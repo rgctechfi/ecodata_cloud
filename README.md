@@ -58,3 +58,9 @@ Reproducibility
 Instructions are clear, it's easy to run the code, and the code works
 
 # Read the CONTEXT.md to understand important things
+
+
+1. Script python API -> .json
+2. Bruin : .json to .parquet :
+bruin run pipeline/assets/ingestion/imf_json_to_parquet.py
+3. Ingesting
