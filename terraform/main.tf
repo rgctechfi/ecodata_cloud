@@ -28,7 +28,7 @@ resource "google_project_service" "services" {
 # Service account for ingestion
 resource "google_service_account" "sa_ecodata" {
   account_id   = "bruin-ingestor"
-  display_name = "Compte pour l'ingestion et Bruin"
+  display_name = "Account for ingesting and Bruin"
 
   depends_on = [google_project_service.services]
 }

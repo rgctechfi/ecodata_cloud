@@ -11,3 +11,4 @@ pandas
 requests
 pyarrow
 python-dateutil
+google-cloud-storage
