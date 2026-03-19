@@ -10,7 +10,7 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 - Orchestration: Bruin (CLI-driven batch runs)
 - Data lake: Google Cloud Storage (bronze + silver)
 - Data warehouse: BigQuery (gold dataset)
-- Transformations: dbt or SQL in BigQuery (planned)
+- Transformations/Quality: Bruin (Python assets) + optional SQL in BigQuery
 - Dashboard: Looker Studio or similar (planned)
 - Languages: Python, SQL
 
@@ -21,15 +21,36 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 2. Convert JSON to Parquet: `data/parquet`
 3. Upload Parquet to GCS bronze: `gs://ecodatacloud-ds-bronze/parquet`
 4. Promote Parquet to GCS silver: `gs://ecodatacloud-ds-silver/parquet`
-5. Transform into BigQuery tables (planned)
-6. Build a dashboard with at least two tiles (planned)
+5. Run Bruin data quality checks on silver (GCS)
+6. Load partitioned + clustered gold tables in BigQuery
+7. Transform into BigQuery tables (gold models) (optional, later)
+8. Build a dashboard with at least two tiles (planned)
+
+**Batch DAG**
+```mermaid
+graph TD
+  A[IMF DataMapper API] --> B[Extract JSON (Bruin)]
+  B --> C[Convert to Parquet (Bruin)]
+  C --> D[Upload to GCS Bronze]
+  D --> E[Promote to Silver + transforms (Bruin)]
+  E --> F[Quality checks on Silver (Bruin)]
+  F --> G[Load Gold tables in BigQuery]
+```
+Each arrow means “this step depends on the previous one”; read the flow from left to right.
+
+**Partitioning & Clustering (Gold)**
+Gold tables are created with partitioning and clustering that match typical upstream queries:
+1. Partition by `year` (range partitioning) to prune scans for time-window queries.
+2. Cluster by `country` to accelerate country filters and country-level aggregates.
+3. For the `countries` dimension table, we skip partitioning (small table) and cluster by `country` for fast joins.
+4. These choices map to expected queries like “trend by country over a time range” and “compare countries by indicator”.
 
 **Evaluation Criteria Mapping**
 - Problem description: The project target and data scope are defined in this README.
 - Cloud: GCP is used, and all infrastructure is created with Terraform.
 - Batch / orchestration: Bruin orchestrates batch assets; runs are triggered via CLI or Makefile.
 - Data warehouse: BigQuery dataset is provisioned; partitioning/clustering is planned in transformation step.
-- Transformations: To be implemented with dbt or BigQuery SQL models.
+- Transformations: Bruin-first quality checks; optional SQL models in BigQuery.
 - Dashboard: To be implemented with two tiles after warehouse modeling.
 - Reproducibility: Makefile and step-by-step instructions are provided below.
 
@@ -71,12 +92,18 @@ This creates:
    `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
 4. Promote Parquet from bronze to silver:
    `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
+5. Run Bruin quality checks on silver:
+   `bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py`
+6. Load gold tables in BigQuery (partitioned + clustered):
+   `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
 
 **Orchestration (End-to-End)**
 1. First run: provision infrastructure with `make provision`.
 2. Run the full batch with `make full` (extract → convert → upload → promote).
 3. Subsequent runs can use `make full` directly without reprovisioning.
-4. For scheduling, run `make full` from a cron job or a managed scheduler (Cloud Scheduler / GitHub Actions) with the same environment variables.
+4. Run quality checks with `make quality-checks`.
+5. Load gold tables with `make gold-load`.
+6. For scheduling, run `make full` then `make quality-checks` + `make gold-load` from a cron job or a managed scheduler (Cloud Scheduler / GitHub Actions).
 
 **Makefile Targets**
 - `make auth-check`: verify gcloud and ADC authentication
@@ -85,8 +112,10 @@ This creates:
 - `make bruin-convert`: JSON to Parquet conversion
 - `make ingest-bronze`: upload Parquet to bronze bucket
 - `make promote-silver`: copy bronze parquet objects to the silver bucket
+- `make quality-checks`: run Bruin data quality checks on silver
+- `make gold-load`: load partitioned + clustered gold tables
 - `make full`: provision + extract + convert + upload + promote to silver
-- `make all`: same as `make full`
+- `make all`: provision + extract + convert + upload (no silver promotion)
 
 **Tool Equivalents**
 - `make auth-check`
@@ -103,6 +132,10 @@ This creates:
   - `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
 - `make promote-silver`
   - `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
+- `make quality-checks`
+  - `bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py`
+- `make gold-load`
+  - `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
 
 **Notes**
 - The notebook `scripts/api_data.ipynb` is kept for exploration; the automated pipeline uses the Bruin asset instead.
@@ -112,12 +145,27 @@ This creates:
 Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Makefile target:
 1. `bruin/pipeline/assets/ingestion/imf_api_extract.py` downloads IMF DataMapper JSON into `data/raw/*` and writes a log at `data/raw/api_download_log.txt`.
 2. `bruin/pipeline/assets/ingestion/imf_json_to_parquet.py` converts every JSON file to Parquet under `data/parquet/*` and writes a log at `data/parquet/_logs/imf_json_to_parquet_log.csv`.
-3. `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py` copies parquet objects from bronze to silver and writes a log at `data/silver/_logs/imf_bronze_to_silver_log.csv`.
-4. `make full` runs the end-to-end batch: provision infra, extract, convert, upload, then promote to silver.
+3. `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py` promotes parquet objects from bronze to silver, applying configured drop/rename rules, and writes a log at `data/silver/_logs/imf_bronze_to_silver_log.csv`.
+4. `bruin/pipeline/assets/ingestion/imf_quality_checks.py` validates silver Parquet quality and writes a log at `data/silver/_logs/imf_quality_checks_log.csv`.
+5. `bruin/pipeline/assets/ingestion/imf_gold_load.py` loads partitioned + clustered gold tables in BigQuery and writes a log at `data/gold/_logs/imf_gold_load_log.csv`.
+6. `make full` runs the ingestion batch; quality + gold are `make quality-checks` and `make gold-load`.
 
 **Batch Configuration**
 Batch parameters are passed via `BRUIN_VARS` as JSON. Example:
 `BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"],"dry_run":true,"max_objects":5}'`
+
+Example end-to-end batch configuration:
+```bash
+BRUIN_VARS='{
+  "datasets": ["gdp_per_capita_usd", "public_debt_gdp"],
+  "periods": ["2019", "2020"],
+  "bronze_bucket": "ecodatacloud-ds-bronze",
+  "silver_bucket": "ecodatacloud-ds-silver",
+  "prefix": "parquet/",
+  "overwrite": false,
+  "dry_run": false
+}' make full
+```
 
 Extraction parameters:
 1. `datasets`: list of dataset keys to download.
@@ -131,3 +179,32 @@ Promotion (bronze → silver) parameters:
 4. `overwrite`: overwrite existing objects in silver. Default: `false`.
 5. `dry_run`: log actions without copying. Default: `false`.
 6. `max_objects`: limit the number of objects processed (useful for testing).
+7. `transform_config`: optional path to a JSON transform config (default: `bruin/pipeline/config/silver_transforms.json`).
+
+Transform configuration file (`bruin/pipeline/config/silver_transforms.json`):
+1. `default.drop_columns`: columns to drop for all datasets.
+2. `default.rename_columns`: rename map for all datasets.
+3. `datasets.<dataset>.drop_columns`: dataset-specific columns to drop.
+4. `datasets.<dataset>.rename_columns`: dataset-specific rename map.
+
+Quality checks parameters:
+1. `quality_config`: optional path to a JSON quality config (default: `bruin/pipeline/config/quality_checks.json`).
+2. `fail_on_error`: fail the run if any dataset violates checks. Default: `true`.
+3. `max_objects`: limit the number of datasets validated.
+
+Gold load parameters:
+1. `bq_project`: BigQuery project id (defaults to ADC project).
+2. `bq_dataset`: BigQuery dataset for gold tables. Default: `ecodatacloud_bq_gold`.
+3. `bq_location`: BigQuery location. Default: `EU`.
+4. `table_prefix`: prefix for gold tables. Default: `gold__`.
+5. `overwrite`: overwrite existing tables. Default: `false`.
+6. `write_disposition`: BigQuery write disposition. Default: `WRITE_TRUNCATE`.
+7. `create_disposition`: BigQuery create disposition. Default: `CREATE_IF_NEEDED`.
+8. `gold_config`: optional path to gold table config (default: `bruin/pipeline/config/gold_tables.json`).
+
+Gold table configuration file (`bruin/pipeline/config/gold_tables.json`):
+1. `default.partition_field`: field used for partitioning (default `year`).
+2. `default.partition_range`: range settings (`start`, `end`, `interval`).
+3. `default.cluster_fields`: list of clustering fields (default `country`).
+4. `datasets.<dataset>.partition_field`: override per dataset (use `null` to disable).
+5. `datasets.<dataset>.cluster_fields`: override per dataset.

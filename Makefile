@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver full all
+.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver quality-checks gold-load full all
 
 help:
 	@echo "Targets:"
@@ -10,8 +10,10 @@ help:
 	@echo "  make bruin-convert # run the Bruin asset to convert JSON to Parquet"
 	@echo "  make ingest-bronze # upload Parquet files to the bronze bucket"
 	@echo "  make promote-silver # copy bronze parquet objects to the silver bucket"
+	@echo "  make quality-checks # run Bruin data quality checks on silver"
+	@echo "  make gold-load     # load partitioned + clustered gold tables"
 	@echo "  make full         # provision infra, extract, convert, upload, promote to silver"
-	@echo "  make all          # full project run (provision + extract + convert + upload + silver)"
+	@echo "  make all          # provision + extract + convert + upload (no silver promotion)"
 	@echo "  make terraform-plan/terraform-apply/terraform-validate"
 
 auth-check:
@@ -49,6 +51,12 @@ ingest-bronze: auth-check
 promote-silver: auth-check
 	bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py
 
+quality-checks: auth-check
+	bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py
+
+gold-load: auth-check
+	bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py
+
 full: provision bruin-extract bruin-convert ingest-bronze promote-silver
 
-all: full
+all: provision bruin-extract bruin-convert ingest-bronze

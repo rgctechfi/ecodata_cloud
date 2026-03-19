@@ -12,3 +12,4 @@ requests
 pyarrow
 python-dateutil
 google-cloud-storage
+google-cloud-bigquery

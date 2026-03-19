@@ -1,0 +1,17 @@
+{
+  "default": {
+    "partition_field": "year",
+    "partition_range": {
+      "start": 1960,
+      "end": 2035,
+      "interval": 1
+    },
+    "cluster_fields": ["country"]
+  },
+  "datasets": {
+    "countries": {
+      "partition_field": null,
+      "cluster_fields": ["country"]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "default": {
+    "drop_columns": [],
+    "rename_columns": {}
+  },
+  "datasets": {}
+}

@@ -1,0 +1,16 @@
+{
+  "default": {
+    "required_columns": ["country"],
+    "not_null_columns": ["country"],
+    "numeric_columns": ["year", "value"],
+    "min_year": 1960,
+    "max_year": 2035
+  },
+  "datasets": {
+    "countries": {
+      "required_columns": ["country", "label"],
+      "not_null_columns": ["country", "label"],
+      "numeric_columns": []
+    }
+  }
+}
