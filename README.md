@@ -1,5 +1,17 @@
+<p align="center">
+  <img src="./ressources/pictures/fmi_logo.jpg" alt="IMF logo" width="400" />
+</p>
+
+**Project**
 **Overview**
-This project builds a reproducible data pipeline around IMF DataMapper indicators. The goal is to collect economic data, store it in a cloud data lake, and prepare it for analysis and dashboards.
+This project builds a reproducible data pipeline around IMF DataMapper indicators. The goal is to collect different economic countries datas:
+- inflation
+- Gross Domestic Product
+- Debt
+- Employment
+-> store it in a cloud data lake, and prepare it for analysis and dashboards.
+
+This stack is intentionally lightweight: minimal tools, no dbt, and a focus on Python + Bruin + Makefile automation. The goal is to reduce moving parts, keep the pipeline easy to understand and operate, and still leverage Python’s flexibility for transformations/quality checks while Bruin handles orchestration and Makefile keeps runs consistent and reproducible.
 
 **Problem**
 Provide a clean, repeatable pipeline that aggregates macroeconomic indicators across countries and years, and makes them available for downstream analytics.
@@ -14,6 +26,7 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 - Dashboard: Looker Studio or similar (planned)
 - Languages: Python, SQL
 
+**Architecture**
 **Architecture (Batch)**
 1. Extract IMF API data into JSON: `data/raw`
 2. Convert JSON to Parquet: `data/parquet`
@@ -52,6 +65,7 @@ Gold tables are created with partitioning and clustering that match typical upst
 - Dashboard: To be implemented with two tiles after warehouse modeling.
 - Reproducibility: Makefile and step-by-step instructions are provided below.
 
+**Setup**
 **Prerequisites**
 1. macOS/Linux
 2. Google Cloud CLI (`gcloud`)
@@ -125,6 +139,7 @@ GCS buckets require an active billing account. If you see:
 `Error 403: The billing account for the owning project is disabled`
 then link a billing account and re-run Terraform.
 
+**Provisioning**
 **Provision Infrastructure (Terraform)**
 1. `cd terraform`
 2. `terraform init`
@@ -137,6 +152,7 @@ This creates:
 3. Buckets: bronze + silver
 4. BigQuery dataset
 
+**Pipeline Runbook**
 **Data Ingestion**
 1. Extract IMF data into JSON with Bruin:
    `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
@@ -169,7 +185,7 @@ This creates:
 - `make quality-checks`: run Bruin data quality checks on silver -> ecodata_cloud/data/silver/_logs/imf_quality_checks_log.csv to check
 - `make gold-load`: load partitioned + clustered gold tables
 - `make full`: provision + extract + convert + upload + promote to silver
-- `make all`: provision + extract + convert + upload (no silver promotion)
+- `make init-to-bronze`: provision + extract + convert + upload (no silver promotion)
 
 **Tool Equivalents**
 - `make auth-check`
@@ -195,6 +211,7 @@ This creates:
 - The notebook `scripts/api_data.ipynb` is kept for exploration; the automated pipeline uses the Bruin asset instead.
 - For project context, read `data/raw/context.md`.
 
+**Configuration**
 **Batch Details (Bruin)**
 Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Makefile target:
 1. `bruin/pipeline/assets/ingestion/imf_api_extract.py` downloads IMF DataMapper JSON into `data/raw/*` and writes a log at `data/raw/api_download_log.txt`.
@@ -208,6 +225,53 @@ Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Ma
 **Batch Configuration**
 Batch parameters are passed via `BRUIN_VARS` as JSON. Example:
 `BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"],"dry_run":true,"max_objects":5}'`
+
+Using `make` with BRUIN_VARS:
+`BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"]}' make full`
+
+Examples:
+```bash
+# Full run with a subset of datasets/years
+BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
+
+# Quick quality check test
+BRUIN_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
+
+# Force overwrite during bronze -> silver
+BRUIN_VARS='{"overwrite":true}' make promote-silver
+```
+
+**Configuration & Logs Locations**
+Configuration files:
+- Silver transforms: `bruin/pipeline/config/silver_transforms.json`
+- Data quality checks: `bruin/pipeline/config/quality_checks.json`
+- Gold tables (partition/clustering): `bruin/pipeline/config/gold_tables.json`
+
+Logs (generated at runtime):
+- API extract log: `data/raw/api_download_log.txt`
+- JSON → Parquet log: `data/parquet/_logs/imf_json_to_parquet_log.csv`
+- Bronze upload log: `data/bronze/_logs/imf_bronze_upload_log.csv`
+- Bronze → Silver log: `data/silver/_logs/imf_bronze_to_silver_log.csv`
+- Quality checks log: `data/silver/_logs/imf_quality_checks_log.csv`
+- Gold load log: `data/gold/_logs/imf_gold_load_log.csv`
+
+Files → Purpose:
+- `bruin/pipeline/assets/ingestion/imf_api_extract.py`: pull IMF data to `data/raw/*` + log `data/raw/api_download_log.txt`
+- `bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`: convert JSON to `data/parquet/*` + log `data/parquet/_logs/imf_json_to_parquet_log.csv`
+- `bruin/pipeline/assets/ingestion/imf_bronze_upload.py`: upload parquet to `gs://ecodatacloud-ds-bronze/parquet/*` + log `data/bronze/_logs/imf_bronze_upload_log.csv`
+- `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`: promote bronze → `gs://ecodatacloud-ds-silver/parquet/*` + log `data/silver/_logs/imf_bronze_to_silver_log.csv`
+- `bruin/pipeline/assets/ingestion/imf_quality_checks.py`: validate silver parquet + log `data/silver/_logs/imf_quality_checks_log.csv`
+- `bruin/pipeline/assets/ingestion/imf_gold_load.py`: load gold tables in BigQuery + log `data/gold/_logs/imf_gold_load_log.csv`
+
+Mini table (Step / File / Input / Output):
+| Step | File | Input | Output |
+| --- | --- | --- | --- |
+| Extract | `bruin/pipeline/assets/ingestion/imf_api_extract.py` | IMF API | `data/raw/*` + `data/raw/api_download_log.txt` |
+| Convert | `bruin/pipeline/assets/ingestion/imf_json_to_parquet.py` | `data/raw/*` | `data/parquet/*` + `data/parquet/_logs/imf_json_to_parquet_log.csv` |
+| Bronze upload | `bruin/pipeline/assets/ingestion/imf_bronze_upload.py` | `data/parquet/*` | `gs://ecodatacloud-ds-bronze/parquet/*` + `data/bronze/_logs/imf_bronze_upload_log.csv` |
+| Silver promote | `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py` | `gs://ecodatacloud-ds-bronze/parquet/*` | `gs://ecodatacloud-ds-silver/parquet/*` + `data/silver/_logs/imf_bronze_to_silver_log.csv` |
+| Quality checks | `bruin/pipeline/assets/ingestion/imf_quality_checks.py` | `gs://ecodatacloud-ds-silver/parquet/*` | `data/silver/_logs/imf_quality_checks_log.csv` |
+| Gold load | `bruin/pipeline/assets/ingestion/imf_gold_load.py` | `gs://ecodatacloud-ds-silver/parquet/*` | BigQuery `ecodatacloud_bq_gold.gold__*` + `data/gold/_logs/imf_gold_load_log.csv` |
 
 Example end-to-end batch configuration:
 ```bash

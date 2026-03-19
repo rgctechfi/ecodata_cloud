@@ -1,6 +1,13 @@
 SHELL := /bin/bash
+BRUIN_VARS ?=
+export BRUIN_VARS
+# BRUIN_VARS is a JSON string passed to Bruin assets.
+# Examples:
+#   BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
+#   BRUIN_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
+#   BRUIN_VARS='{"overwrite":true}' make promote-silver
 
-.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver quality-checks gold-load full all
+.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver quality-checks gold-load full init-to-bronze
 
 help:
 	@echo "Targets:"
@@ -13,7 +20,7 @@ help:
 	@echo "  make quality-checks # run Bruin data quality checks on silver"
 	@echo "  make gold-load     # load partitioned + clustered gold tables"
 	@echo "  make full         # provision infra, extract, convert, upload, promote to silver"
-	@echo "  make all          # provision + extract + convert + upload (no silver promotion)"
+	@echo "  make init-to-bronze # provision + extract + convert + upload (no silver promotion)"
 	@echo "  make terraform-plan/terraform-apply/terraform-validate"
 
 auth-check:
@@ -58,4 +65,4 @@ gold-load: auth-check
 
 full: provision bruin-extract bruin-convert ingest-bronze promote-silver
 
-all: provision bruin-extract bruin-convert ingest-bronze
+init-to-bronze: provision bruin-extract bruin-convert ingest-bronze
