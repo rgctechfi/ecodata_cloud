@@ -45,8 +45,7 @@ bruin-convert:
 	bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py
 
 ingest-bronze: auth-check
-	@command -v gsutil >/dev/null 2>&1 || (echo "gsutil is not installed. Install Google Cloud CLI first." && exit 1)
-	gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet
+	bruin run bruin/pipeline/assets/ingestion/imf_bronze_upload.py
 
 promote-silver: auth-check
 	bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py

@@ -1,0 +1,5 @@
+add quickstart
+add prerequisite
+add uv & environnement starting
+
+prblem : compare different economical variables between us and try to discover tendancy

@@ -14,27 +14,25 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 - Dashboard: Looker Studio or similar (planned)
 - Languages: Python, SQL
 
-
-
 **Architecture (Batch)**
 1. Extract IMF API data into JSON: `data/raw`
 2. Convert JSON to Parquet: `data/parquet`
-3. Upload Parquet to GCS bronze: `gs://ecodatacloud-ds-bronze/parquet`
+3. Upload Parquet to GCS bronze (Bruin + google-cloud-storage): `gs://ecodatacloud-ds-bronze/parquet`
 4. Promote Parquet to GCS silver: `gs://ecodatacloud-ds-silver/parquet`
 5. Run Bruin data quality checks on silver (GCS)
-6. Load partitioned + clustered gold tables in BigQuery
+6. Load partitioned + clustered gold tables in BigQuery (google-cloud-bigquery)
 7. Transform into BigQuery tables (gold models) (optional, later)
 8. Build a dashboard with at least two tiles (planned)
 
 **Batch DAG**
 ```mermaid
 graph TD
-  A[IMF DataMapper API] --> B[Extract JSON (Bruin)]
-  B --> C[Convert to Parquet (Bruin)]
-  C --> D[Upload to GCS Bronze]
-  D --> E[Promote to Silver + transforms (Bruin)]
-  E --> F[Quality checks on Silver (Bruin)]
-  F --> G[Load Gold tables in BigQuery]
+  A["IMF DataMapper API"] --> B["Extract JSON - Bruin"]
+  B --> C["Convert to Parquet - Bruin"]
+  C --> D["Upload to GCS Bronze - Bruin - google-cloud-storage"]
+  D --> E["Promote to Silver and transforms - Bruin"]
+  E --> F["Quality checks on Silver - Bruin"]
+  F --> G["Load Gold tables - BigQuery - google-cloud-bigquery"]
 ```
 Each arrow means “this step depends on the previous one”; read the flow from left to right.
 
@@ -49,14 +47,14 @@ Gold tables are created with partitioning and clustering that match typical upst
 - Problem description: The project target and data scope are defined in this README.
 - Cloud: GCP is used, and all infrastructure is created with Terraform.
 - Batch / orchestration: Bruin orchestrates batch assets; runs are triggered via CLI or Makefile.
-- Data warehouse: BigQuery dataset is provisioned; partitioning/clustering is planned in transformation step.
+- Data warehouse: BigQuery dataset is provisioned; partitioning/clustering is applied during gold load.
 - Transformations: Bruin-first quality checks; optional SQL models in BigQuery.
 - Dashboard: To be implemented with two tiles after warehouse modeling.
 - Reproducibility: Makefile and step-by-step instructions are provided below.
 
 **Prerequisites**
 1. macOS/Linux
-2. Google Cloud CLI (`gcloud` + `gsutil`)
+2. Google Cloud CLI (`gcloud`)
 3. Terraform
 4. Bruin CLI
 5. Python (optional, only if you want to open the notebook)
@@ -88,13 +86,13 @@ This creates:
    `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
 2. Convert JSON to Parquet with Bruin:
    `bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`
-3. Upload Parquet to bronze:
-   `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
+3. Upload Parquet to bronze (Bruin):
+   `bruin run bruin/pipeline/assets/ingestion/imf_bronze_upload.py`
 4. Promote Parquet from bronze to silver:
    `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
 5. Run Bruin quality checks on silver:
    `bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py`
-6. Load gold tables in BigQuery (partitioned + clustered):
+6. Load gold tables in BigQuery (partitioned + clustered, google-cloud-bigquery):
    `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
 
 **Orchestration (End-to-End)**
@@ -129,7 +127,7 @@ This creates:
 - `make bruin-extract`
   - `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
 - `make ingest-bronze`
-  - `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
+  - `bruin run bruin/pipeline/assets/ingestion/imf_bronze_upload.py`
 - `make promote-silver`
   - `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
 - `make quality-checks`
@@ -145,10 +143,11 @@ This creates:
 Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Makefile target:
 1. `bruin/pipeline/assets/ingestion/imf_api_extract.py` downloads IMF DataMapper JSON into `data/raw/*` and writes a log at `data/raw/api_download_log.txt`.
 2. `bruin/pipeline/assets/ingestion/imf_json_to_parquet.py` converts every JSON file to Parquet under `data/parquet/*` and writes a log at `data/parquet/_logs/imf_json_to_parquet_log.csv`.
-3. `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py` promotes parquet objects from bronze to silver, applying configured drop/rename rules, and writes a log at `data/silver/_logs/imf_bronze_to_silver_log.csv`.
-4. `bruin/pipeline/assets/ingestion/imf_quality_checks.py` validates silver Parquet quality and writes a log at `data/silver/_logs/imf_quality_checks_log.csv`.
-5. `bruin/pipeline/assets/ingestion/imf_gold_load.py` loads partitioned + clustered gold tables in BigQuery and writes a log at `data/gold/_logs/imf_gold_load_log.csv`.
-6. `make full` runs the ingestion batch; quality + gold are `make quality-checks` and `make gold-load`.
+3. `bruin/pipeline/assets/ingestion/imf_bronze_upload.py` uploads parquet files to the bronze bucket and writes a log at `data/bronze/_logs/imf_bronze_upload_log.csv`.
+4. `bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py` promotes parquet objects from bronze to silver, applying configured drop/rename rules, and writes a log at `data/silver/_logs/imf_bronze_to_silver_log.csv`.
+5. `bruin/pipeline/assets/ingestion/imf_quality_checks.py` validates silver Parquet quality and writes a log at `data/silver/_logs/imf_quality_checks_log.csv`.
+6. `bruin/pipeline/assets/ingestion/imf_gold_load.py` loads partitioned + clustered gold tables in BigQuery and writes a log at `data/gold/_logs/imf_gold_load_log.csv`.
+7. `make full` runs the ingestion batch; quality + gold are `make quality-checks` and `make gold-load`.
 
 **Batch Configuration**
 Batch parameters are passed via `BRUIN_VARS` as JSON. Example:
@@ -180,6 +179,14 @@ Promotion (bronze → silver) parameters:
 5. `dry_run`: log actions without copying. Default: `false`.
 6. `max_objects`: limit the number of objects processed (useful for testing).
 7. `transform_config`: optional path to a JSON transform config (default: `bruin/pipeline/config/silver_transforms.json`).
+
+Bronze upload parameters:
+1. `bronze_bucket`: destination bucket name. Default: `ecodatacloud-ds-bronze`.
+2. `prefix`: object prefix to upload under. Default: `parquet/`.
+3. `overwrite`: overwrite existing objects in bronze. Default: `false`.
+4. `dry_run`: log actions without uploading. Default: `false`.
+5. `max_files`: limit the number of parquet files uploaded.
+6. `local_parquet_dir`: override local parquet directory (default: `data/parquet`).
 
 Transform configuration file (`bruin/pipeline/config/silver_transforms.json`):
 1. `default.drop_columns`: columns to drop for all datasets.
