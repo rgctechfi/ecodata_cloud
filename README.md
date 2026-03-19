@@ -1,66 +1,91 @@
-The command are MacOS/Linux ready, not for Windows.
-The project is a foundation for a big project where the goal is to aggregate economical values
+**Overview**
+This project builds a reproducible data pipeline around IMF DataMapper indicators. The goal is to collect economic data, store it in a cloud data lake, and prepare it for analysis and dashboards.
 
-generate a picture of the project
+**Problem**
+Provide a clean, repeatable pipeline that aggregates macroeconomic indicators across countries and years, and makes them available for downstream analytics.
 
-# insert map of solution
-- cloud
+**Stack**
+- Cloud: Google Cloud Platform (GCP)
+- IaC: Terraform
+- Orchestration: Bruin (CLI-driven batch runs)
+- Data lake: Google Cloud Storage (bronze + silver)
+- Data warehouse: BigQuery (gold dataset)
+- Transformations: dbt or SQL in BigQuery (planned)
+- Dashboard: Looker Studio or similar (planned)
+- Languages: Python, SQL
 
-- parquet is not mandatory for this size of data but I think scalable, and later the project could be bigger.
+**Architecture (Batch)**
+1. Extract IMF API data into JSON: `data/raw`
+2. Convert JSON to Parquet: `data/parquet`
+3. Upload Parquet to GCS bronze: `gs://ecodatacloud-ds-bronze/parquet`
+4. Transform into BigQuery tables (planned)
+5. Build a dashboard with at least two tiles (planned)
 
-Solution requierements :
-- Selecting a dataset :
-- Creating a pipeline for processing this dataset and putting it to a datalake
-- Creating a pipeline for moving the data from the lake to a data warehouse
-- Transforming the data in the data warehouse: prepare it for the dashboard
-- Building a dashboard to visualize the data
+**Evaluation Criteria Mapping**
+- Problem description: The project target and data scope are defined in this README.
+- Cloud: GCP is used, and all infrastructure is created with Terraform.
+- Batch / orchestration: Bruin orchestrates batch assets; runs are triggered via CLI or Makefile.
+- Data warehouse: BigQuery dataset is provisioned; partitioning/clustering is planned in transformation step.
+- Transformations: To be implemented with dbt or BigQuery SQL models.
+- Dashboard: To be implemented with two tiles after warehouse modeling.
+- Reproducibility: Makefile and step-by-step instructions are provided below.
 
-# Data pipeline
-Batch: run things periodically (e.g. hourly/daily)
+**Prerequisites**
+1. macOS/Linux
+2. Google Cloud CLI (`gcloud` + `gsutil`)
+3. Terraform
+4. Bruin CLI
+5. Python (for the notebook extraction)
 
-# Data stack architecture choice:
+**GCP Auth**
+1. `gcloud auth application-default login`
+2. `gcloud config set project ecodatacloud`
+3. `gcloud auth application-default print-access-token`
 
-## The stack
+**Billing Requirement**
+GCS buckets require an active billing account. If you see:
+`Error 403: The billing account for the owning project is disabled`
+then link a billing account and re-run Terraform.
 
-Container: Docker
-Data lake:
-Workflow orchestration: Airflow,
-OLAP Database:
-Batch processing:
+**Provision Infrastructure (Terraform)**
+1. `cd terraform`
+2. `terraform init`
+3. `terraform plan`
+4. `terraform apply`
 
-Langages : Python, SQL, Pyspark
+This creates:
+1. Service account `bruin-ingestor`
+2. IAM roles: Storage Object Admin + BigQuery Data Editor
+3. Buckets: bronze + silver
+4. BigQuery dataset
 
-## Cloud Architecture: Why ?
+**Data Ingestion**
+1. Extract IMF data into JSON: run `scripts/api_data.ipynb`
+2. Convert JSON to Parquet with Bruin:
+   `bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`
+3. Upload Parquet to bronze:
+   `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
 
+**Makefile Targets**
+- `make auth-check`: verify gcloud and ADC authentication
+- `make provision`: Terraform init + apply
+- `make bruin-convert`: JSON to Parquet conversion
+- `make ingest-bronze`: upload Parquet to bronze bucket
+- `make full`: provision + convert + upload
+- `make all`: same as `make full`
 
+**Tool Equivalents**
+- `make auth-check`
+  - `gcloud auth application-default print-access-token`
+  - `gcloud config get-value project`
+- `make provision`
+  - `terraform -chdir=terraform init`
+  - `terraform -chdir=terraform apply`
+- `make bruin-convert`
+  - `bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`
+- `make ingest-bronze`
+  - `gsutil -m rsync -r data/parquet gs://ecodatacloud-ds-bronze/parquet`
 
-# Evaluation metrics:
-
-Problem description
-Problem is well described and it's clear what the problem the project solves
-
-Cloud
-The project is developed in the cloud and IaC tools are used
-
-Batch / Workflow orchestration:
-End-to-end pipeline: multiple steps in the DAG, uploading data to data lake
-
-Data warehouse
-Tables are partitioned and clustered in a way that makes sense for the upstream queries (with explanation)
-
-Transformations (dbt, spark, etc)
-Tranformations are defined with dbt, Spark or similar technologies
-
-Dashboard 
-A dashboard with 2 tiles
-
-Reproducibility
-Instructions are clear, it's easy to run the code, and the code works
-
-# Read the CONTEXT.md to understand important things
-
-
-1. Script python API -> .json
-2. Bruin : .json to .parquet :
-bruin run pipeline/assets/ingestion/imf_json_to_parquet.py
-3. Ingesting
+**Notes**
+- The extraction step is currently manual via notebook. You can later automate it into a Bruin asset.
+- For project context, read `data/raw/context.md`.

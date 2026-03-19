@@ -1,27 +1,32 @@
 variable "project" {
   description = "Project ID"
   type        = string
-  default     = "taxi-rides-ny-485214" 
+  default     = "ecodatacloud"
 }
 
 variable "region" {
   description = "Project Region"
-  default     = "us-central1"
+  default     = "europe-west1"
 }
 
 variable "location" {
   description = "Project Location"
-  default     = "US"
+  default     = "EU"
 }
 
 variable "bq_dataset_name" {
   description = "My WEO dataset"
-  default     = "weo_bigquery_dataset"
+  default     = "ecodatacloud_bq_gold"
 }
 
-variable "gcs_bucket_name" {
-  description = "My Storage Bucket Name"
-  default     = "taxi-rides-ny-485214-terra-bucket"
+variable "gcs_bucket_bronze_name" {
+  description = "Bronze Storage Bucket Name"
+  default     = "ecodatacloud-ds-bronze"
+}
+
+variable "gcs_bucket_silver_name" {
+  description = "Silver Storage Bucket Name"
+  default     = "ecodatacloud-ds-silver"
 }
 
 variable "gcs_storage_class" {
