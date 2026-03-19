@@ -64,6 +64,62 @@ Gold tables are created with partitioning and clustering that match typical upst
 2. `gcloud config set project ecodatacloud`
 3. `gcloud auth application-default print-access-token`
 
+**IAM Requirements**
+The pipeline needs two sets of permissions:
+1. User/Owner account (used by Terraform when it manages IAM):
+1. `roles/owner` (or equivalent admin permissions)
+2. Service account `bruin-ingestor@ecodatacloud.iam.gserviceaccount.com` (used by Bruin assets):
+1. `roles/storage.admin`
+2. `roles/storage.objectAdmin`
+3. `roles/bigquery.dataOwner` (needed for dataset updates)
+4. `roles/bigquery.dataEditor`
+5. `roles/iam.serviceAccountAdmin`
+6. `roles/resourcemanager.projectIamAdmin`
+7. `roles/serviceusage.serviceUsageAdmin`
+
+Required APIs (enable once in the project):
+1. `serviceusage.googleapis.com`
+2. `cloudresourcemanager.googleapis.com`
+3. `iam.googleapis.com`
+4. `storage.googleapis.com`
+5. `bigquery.googleapis.com`
+
+Note: Terraform must be executed with your Owner account (ADC user). The Bruin assets run with the service account.
+
+IAM setup commands (run once with an Owner account):
+```bash
+gcloud auth login
+gcloud config set project ecodatacloud
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/storage.admin
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/storage.objectAdmin
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/bigquery.dataOwner
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/bigquery.dataEditor
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/iam.serviceAccountAdmin
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/resourcemanager.projectIamAdmin
+
+gcloud projects add-iam-policy-binding ecodatacloud \
+  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
+  --role=roles/serviceusage.serviceUsageAdmin
+```
+
 **Billing Requirement**
 GCS buckets require an active billing account. If you see:
 `Error 403: The billing account for the owning project is disabled`
@@ -110,7 +166,7 @@ This creates:
 - `make bruin-convert`: JSON to Parquet conversion
 - `make ingest-bronze`: upload Parquet to bronze bucket
 - `make promote-silver`: copy bronze parquet objects to the silver bucket
-- `make quality-checks`: run Bruin data quality checks on silver
+- `make quality-checks`: run Bruin data quality checks on silver -> ecodata_cloud/data/silver/_logs/imf_quality_checks_log.csv to check
 - `make gold-load`: load partitioned + clustered gold tables
 - `make full`: provision + extract + convert + upload + promote to silver
 - `make all`: provision + extract + convert + upload (no silver promotion)

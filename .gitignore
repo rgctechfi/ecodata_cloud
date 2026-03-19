@@ -35,3 +35,4 @@ data/parquet/**
 **/service-account*.json
 .gcloud/
 .config/gcloud/
+./crednetials/

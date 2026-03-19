@@ -2,8 +2,8 @@
   "default": {
     "partition_field": "year",
     "partition_range": {
-      "start": 1960,
-      "end": 2035,
+      "start": 2000,
+      "end": 2026,
       "interval": 1
     },
     "cluster_fields": ["country"]

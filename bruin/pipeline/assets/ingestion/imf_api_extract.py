@@ -79,7 +79,7 @@ def run_extract() -> None:
     url_gdp_pc_ppp = "https://www.imf.org/external/datamapper/api/v1/PPPPC"
     url_unemployment = "https://www.imf.org/external/datamapper/api/v1/LUR"
     url_debt = "https://www.imf.org/external/datamapper/api/v1/GGXWDG_NGDP"
-    url_inflation = "https://www.imf.org/external/datamapper/api/v1/PCPIECH"
+    url_inflation = "https://www.imf.org/external/datamapper/api/v1/PCPIEPCH"
     url_countries = "https://www.imf.org/external/datamapper/api/v1/countries"
 
     endpoints = {
