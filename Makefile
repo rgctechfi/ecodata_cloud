@@ -43,7 +43,7 @@ terraform-plan: terraform-init
 terraform-apply: terraform-init
 	terraform -chdir=terraform apply
 
-provision: auth-check terraform-apply
+provision: auth-check terraform-plan terraform-apply
 
 bruin-extract:
 	bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py
