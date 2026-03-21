@@ -1,12 +1,15 @@
-# 𝙀𝙘𝙤𝙙𝙖𝙩𝙖 - 𝘾𝙡𝙤𝙪𝙙
+<h1 align="center" style="color:#0B2D5C; font-size: 44px; margin-bottom: 8px;">
+  <img src="./ressources/pictures/RGC_logo.jpeg" alt="RGC logo" width="80" style="vertical-align: middle; margin-right: 10px;" />
+  <span>𝙀𝙘𝙤𝙙𝙖𝙩𝙖 - 𝘾𝙡𝙤𝙪𝙙</span>
+</h1>
 
 <p align="center">
-  <img src="./ressources/pictures/fmi_logo.jpg" alt="IMF logo" width="400" />
+  <img src="./ressources/pictures/fmi_logo.jpg" alt="IMF logo" width="300" />
 </p>
 
-## **𝙋𝙧𝙤𝙟𝙚𝙘𝙩**
+## <span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙟𝙚𝙘𝙩**</span>
 
-### **𝙀𝙫𝙖𝙡𝙪𝙖𝙩𝙞𝙤𝙣 𝘾𝙧𝙞𝙩𝙚𝙧𝙞𝙖 𝙈𝙖𝙥𝙥𝙞𝙣𝙜 𝙛𝙤𝙧 𝙫𝙖𝙡𝙞𝙙𝙖𝙩𝙞𝙤𝙣 𝙤𝙛 𝙩𝙝𝙚 𝙥𝙧𝙤𝙟𝙚𝙘𝙩**
+### <span style="color:#0B2D5C;">**𝙀𝙫𝙖𝙡𝙪𝙖𝙩𝙞𝙤𝙣 𝘾𝙧𝙞𝙩𝙚𝙧𝙞𝙖 𝙈𝙖𝙥𝙥𝙞𝙣𝙜 𝙛𝙤𝙧 𝙫𝙖𝙡𝙞𝙙𝙖𝙩𝙞𝙤𝙣 𝙤𝙛 𝙩𝙝𝙚 𝙥𝙧𝙤𝙟𝙚𝙘𝙩**</span>
 - Problem description: The project target and data scope are defined in this README.
 - Cloud: GCP is used, and all infrastructure is created with Terraform.
 - Batch / orchestration: Bruin orchestrates batch assets; runs are triggered via CLI or Makefile.
@@ -15,7 +18,7 @@
 - Dashboard: To be implemented with two tiles after warehouse modeling.
 - Reproducibility: Makefile and step-by-step instructions are provided below.
 
-## **𝙊𝙫𝙚𝙧𝙫𝙞𝙚𝙬**
+## <span style="color:#0B2D5C;">**𝙊𝙫𝙚𝙧𝙫𝙞𝙚𝙬**</span>
 This project builds a reproducible data pipeline around IMF DataMapper indicators. The goal is to collect different economic countries datas:
 
 - Inflation
@@ -31,10 +34,10 @@ It is basically a tiny “task runner” that lets us run common project command
 Makefile is better when you have multiple tasks with dependencies and want a standard interface (e.g., make full, make gold-load).
 .sh is better for a single long script or when you need more complex logic.
 
-**𝙋𝙧𝙤𝙗𝙡𝙚𝙢**
+<span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙗𝙡𝙚𝙢**</span>
 Provide a clean, repeatable pipeline that aggregates macroeconomic indicators across countries and years, and makes them available for downstream analytics. A key goal is to compare different economic variables between countries (e.g., US vs others) to discover trends.
 
-## **𝙎𝙩𝙖𝙘𝙠**
+## <span style="color:#0B2D5C;">**𝙎𝙩𝙖𝙘𝙠**</span>
 - Cloud: Google Cloud Platform (GCP)
 - IaC: Terraform
 - Orchestration: Bruin (CLI-driven batch runs)
@@ -44,14 +47,14 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 - Dashboard: Looker Studio
 - Languages: Python, SQL
 
-### **𝘼𝙧𝙘𝙝𝙞𝙩𝙚𝙘𝙩𝙪𝙧𝙚**
+### <span style="color:#0B2D5C;">**𝘼𝙧𝙘𝙝𝙞𝙩𝙚𝙘𝙩𝙪𝙧𝙚**</span>
 
 <p align="center">
   <img src="./ressources/pictures/architecture.jpeg" alt="Architecture" width="1000" />
 </p>
 
 
-### **𝘼𝙧𝙘𝙝𝙞𝙩𝙚𝙘𝙩𝙪𝙧𝙚 (𝘽𝙖𝙩𝙘𝙝)**
+### <span style="color:#0B2D5C;">**𝘼𝙧𝙘𝙝𝙞𝙩𝙚𝙘𝙩𝙪𝙧𝙚 (𝘽𝙖𝙩𝙘𝙝)**</span>
 1. 𝙀𝙭𝙩𝙧𝙖𝙘𝙩 IMF API data into JSON: `data/raw`
 2. 𝘾𝙤𝙣𝙫𝙚𝙧𝙩 JSON to Parquet: `data/parquet`
 3. 𝙐𝙥𝙡𝙤𝙖𝙙 Parquet to GCS bronze (Bruin + google-cloud-storage): `gs://ecodatacloud-ds-bronze/parquet`
@@ -61,7 +64,7 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 7. 𝙏𝙧𝙖𝙣𝙨𝙛𝙤𝙧𝙢 into BigQuery tables (gold models) (optional, later)
 8. 𝘽𝙪𝙞𝙡𝙙 a dashboard with at least two tiles (planned)
 
-### **𝘽𝙖𝙩𝙘𝙝 𝘿𝘼𝙂**
+### <span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘿𝘼𝙂**</span>
 ```mermaid
 graph TD
   A["IMF DataMapper API"] --> B["Extract JSON - Bruin"]
@@ -73,7 +76,7 @@ graph TD
 ```
 Each arrow means “this step depends on the previous one”; read the flow from left to right.
 
-### **𝙋𝙖𝙧𝙩𝙞𝙩𝙞𝙤𝙣𝙞𝙣𝙜 & 𝘾𝙡𝙪𝙨𝙩𝙚𝙧𝙞𝙣𝙜 (𝘽𝙞𝙜 𝙌𝙪𝙚𝙧𝙮 - 𝙂𝙤𝙡𝙙 𝙡𝙖𝙮𝙚𝙧)**
+### <span style="color:#0B2D5C;">**𝙋𝙖𝙧𝙩𝙞𝙩𝙞𝙤𝙣𝙞𝙣𝙜 & 𝘾𝙡𝙪𝙨𝙩𝙚𝙧𝙞𝙣𝙜 (𝘽𝙞𝙜 𝙌𝙪𝙚𝙧𝙮 - 𝙂𝙤𝙡𝙙 𝙡𝙖𝙮𝙚𝙧)**</span>
 Gold tables are created with partitioning and clustering that match typical upstream queries:
 1. 𝙋𝙖𝙧𝙩𝙞𝙩𝙞𝙤𝙣 by `year` (range partitioning) to prune scans for time-window queries.
 2. 𝘾𝙡𝙪𝙨𝙩𝙚𝙧 by `country` to accelerate country filters and country-level aggregates.
@@ -82,20 +85,20 @@ Gold tables are created with partitioning and clustering that match typical upst
 
 ---
 
-## **𝙎𝙚𝙩𝙪𝙥**
-**𝙋𝙧𝙚𝙧𝙚𝙦𝙪𝙞𝙨𝙞𝙩𝙚𝙨**
+## <span style="color:#0B2D5C;">**𝙎𝙚𝙩𝙪𝙥**</span>
+<span style="color:#0B2D5C;">**𝙋𝙧𝙚𝙧𝙚𝙦𝙪𝙞𝙨𝙞𝙩𝙚𝙨**</span>
 1. 𝙢𝙖𝙘𝙊𝙎/𝙇𝙞𝙣𝙪𝙭
 2. 𝙂𝙤𝙤𝙜𝙡𝙚 𝘾𝙡𝙤𝙪𝙙 𝘾𝙇𝙄 (`gcloud`)
 3. 𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢
 4. 𝘽𝙧𝙪𝙞𝙣 𝘾𝙇𝙄
 5. 𝙋𝙮𝙩𝙝𝙤𝙣 (𝙤𝙥𝙩𝙞𝙤𝙣𝙖𝙡, 𝙤𝙣𝙡𝙮 𝙞𝙛 𝙮𝙤𝙪 𝙬𝙖𝙣𝙩 𝙩𝙤 𝙤𝙥𝙚𝙣 𝙩𝙝𝙚 𝙣𝙤𝙩𝙚𝙗𝙤𝙤𝙠)
 
-**𝙌𝙪𝙞𝙘𝙠𝙨𝙩𝙖𝙧𝙩**
+<span style="color:#0B2D5C;">**𝙌𝙪𝙞𝙘𝙠𝙨𝙩𝙖𝙧𝙩**</span>
 1. 𝙍𝙪𝙣 `make provision`
 2. 𝙍𝙪𝙣 `make full`
 3. 𝙍𝙪𝙣 `make quality-checks` 𝙖𝙣𝙙 `make gold-load`
 
-**𝙐𝙑 𝙀𝙣𝙫𝙞𝙧𝙤𝙣𝙢𝙚𝙣𝙩 (𝙊𝙥𝙩𝙞𝙤𝙣𝙖𝙡)**
+<span style="color:#0B2D5C;">**𝙐𝙑 𝙀𝙣𝙫𝙞𝙧𝙤𝙣𝙢𝙚𝙣𝙩 (𝙊𝙥𝙩𝙞𝙤𝙣𝙖𝙡)**</span>
 Use `uv` for local development only (Bruin installs its own dependencies per asset):
 ```bash
 uv venv
@@ -103,12 +106,12 @@ source .venv/bin/activate
 uv pip install -r bruin/pipeline/assets/ingestion/requirements.txt
 ```
 
-**𝙂𝘾𝙋 𝘼𝙪𝙩𝙝**
+<span style="color:#0B2D5C;">**𝙂𝘾𝙋 𝘼𝙪𝙩𝙝**</span>
 1. `gcloud auth application-default login`
 2. `gcloud config set project ecodatacloud`
 3. `gcloud auth application-default print-access-token`
 
-**𝙄𝘼𝙈 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩𝙨**
+<span style="color:#0B2D5C;">**𝙄𝘼𝙈 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩𝙨**</span>
 The pipeline needs two sets of permissions:
 
 1. User/Owner account (used by Terraform when it manages IAM):
@@ -166,13 +169,13 @@ gcloud projects add-iam-policy-binding ecodatacloud \
   --role=roles/serviceusage.serviceUsageAdmin
 ```
 
-**𝘽𝙞𝙡𝙡𝙞𝙣𝙜 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩**
+<span style="color:#0B2D5C;">**𝘽𝙞𝙡𝙡𝙞𝙣𝙜 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩**</span>
 GCS buckets require an active billing account. If you see:
 `Error 403: The billing account for the owning project is disabled`
 then link a billing account and re-run Terraform.
 
-**𝙋𝙧𝙤𝙫𝙞𝙨𝙞𝙤𝙣𝙞𝙣𝙜**
-**𝙋𝙧𝙤𝙫𝙞𝙨𝙞𝙤𝙣 𝙄𝙣𝙛𝙧𝙖𝙨𝙩𝙧𝙪𝙘𝙩𝙪𝙧𝙚 (𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢)**
+<span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙫𝙞𝙨𝙞𝙤𝙣𝙞𝙣𝙜**</span>
+<span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙫𝙞𝙨𝙞𝙤𝙣 𝙄𝙣𝙛𝙧𝙖𝙨𝙩𝙧𝙪𝙘𝙩𝙪𝙧𝙚 (𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢)**</span>
 1. 𝙘𝙙 `terraform`
 2. 𝙧𝙪𝙣 `terraform init`
 3. 𝙧𝙪𝙣 `terraform plan`
@@ -186,8 +189,8 @@ This creates:
 3. Buckets: bronze + silver
 4. BigQuery dataset
 
-**𝙋𝙞𝙥𝙚𝙡𝙞𝙣𝙚 𝙍𝙪𝙣𝙗𝙤𝙤𝙠**
-**𝘿𝙖𝙩𝙖 𝙄𝙣𝙜𝙚𝙨𝙩𝙞𝙤𝙣**
+<span style="color:#0B2D5C;">**𝙋𝙞𝙥𝙚𝙡𝙞𝙣𝙚 𝙍𝙪𝙣𝙗𝙤𝙤𝙠**</span>
+<span style="color:#0B2D5C;">**𝘿𝙖𝙩𝙖 𝙄𝙣𝙜𝙚𝙨𝙩𝙞𝙤𝙣**</span>
 1. 𝙀𝙭𝙩𝙧𝙖𝙘𝙩 IMF data into JSON with Bruin:
    `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
 2. 𝘾𝙤𝙣𝙫𝙚𝙧𝙩 JSON to Parquet with Bruin:
@@ -201,7 +204,7 @@ This creates:
 6. 𝙇𝙤𝙖𝙙 gold tables in BigQuery (partitioned + clustered, google-cloud-bigquery):
    `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
 
-**𝙊𝙧𝙘𝙝𝙚𝙨𝙩𝙧𝙖𝙩𝙞𝙤𝙣 (𝙀𝙣𝙙-𝙩𝙤-𝙀𝙣𝙙)**
+<span style="color:#0B2D5C;">**𝙊𝙧𝙘𝙝𝙚𝙨𝙩𝙧𝙖𝙩𝙞𝙤𝙣 (𝙀𝙣𝙙-𝙩𝙤-𝙀𝙣𝙙)**</span>
 1. 𝙁𝙞𝙧𝙨𝙩 run: provision infrastructure with `make provision`.
 2. 𝙍𝙪𝙣 the full batch with `make full` (extract → convert → upload → promote).
 3. 𝙎𝙪𝙗𝙨𝙚𝙦𝙪𝙚𝙣𝙩 runs can use `make full` directly without reprovisioning.
@@ -209,7 +212,7 @@ This creates:
 5. 𝙇𝙤𝙖𝙙 gold tables with `make gold-load`.
 6. 𝙁𝙤𝙧 scheduling, run `make full` then `make quality-checks` + `make gold-load` from a cron job or a managed scheduler (Cloud Scheduler / GitHub Actions).
 
-**𝙁𝙪𝙡𝙡 𝙍𝙪𝙣 𝘼𝙡𝙩𝙚𝙧𝙣𝙖𝙩𝙞𝙫𝙚𝙨**
+<span style="color:#0B2D5C;">**𝙁𝙪𝙡𝙡 𝙍𝙪𝙣 𝘼𝙡𝙩𝙚𝙧𝙣𝙖𝙩𝙞𝙫𝙚𝙨**</span>
 1. 𝙁𝙪𝙡𝙡 𝙈𝙖𝙣𝙪𝙖𝙡:
 ```bash
 terraform init
@@ -230,7 +233,7 @@ make quality-checks
 make gold-load
 ```
 
-**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**
+<span style="color:#0B2D5C;">**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**</span>
 - `make auth-check`: verify gcloud and ADC authentication
 - `make provision`: Terraform init + plan + apply
 - `make bruin-extract`: IMF API extraction to JSON
@@ -242,7 +245,7 @@ make gold-load
 - `make full`: provision + extract + convert + upload + promote to silver
 - `make init-to-bronze`: provision + extract + convert + upload (no silver promotion)
 
-**𝙏𝙤𝙤𝙡 𝙀𝙦𝙪𝙞𝙫𝙖𝙡𝙚𝙣𝙩𝙨**
+<span style="color:#0B2D5C;">**𝙏𝙤𝙤𝙡 𝙀𝙦𝙪𝙞𝙫𝙖𝙡𝙚𝙣𝙩𝙨**</span>
 - `make auth-check`
   - `gcloud auth application-default print-access-token`
   - `gcloud config get-value project`
@@ -263,12 +266,12 @@ make gold-load
 - `make gold-load`
   - `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
 
-**𝙉𝙤𝙩𝙚𝙨**
+<span style="color:#0B2D5C;">**𝙉𝙤𝙩𝙚𝙨**</span>
 - The notebook `scripts/api_data.ipynb` is kept for exploration; the automated pipeline uses the Bruin asset instead.
 - For project context, read `data/raw/context.md`.
 
-**𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣**
-**𝘽𝙖𝙩𝙘𝙝 𝘿𝙚𝙩𝙖𝙞𝙡𝙨 (𝘽𝙧𝙪𝙞𝙣)**
+<span style="color:#0B2D5C;">**𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣**</span>
+<span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘿𝙚𝙩𝙖𝙞𝙡𝙨 (𝘽𝙧𝙪𝙞𝙣)**</span>
 Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Makefile target:
 1. `bruin/pipeline/assets/ingestion/imf_api_extract.py` 𝙙𝙤𝙬𝙣𝙡𝙤𝙖𝙙𝙨 IMF DataMapper JSON into `data/raw/*` and writes a log at `data/raw/api_download_log.txt`.
 2. `bruin/pipeline/assets/ingestion/imf_json_to_parquet.py` 𝙘𝙤𝙣𝙫𝙚𝙧𝙩𝙨 every JSON file to Parquet under `data/parquet/*` and writes a log at `data/parquet/_logs/imf_json_to_parquet_log.csv`.
@@ -278,7 +281,7 @@ Batch orchestration is CLI-driven and fully automated via Bruin assets plus a Ma
 6. `bruin/pipeline/assets/ingestion/imf_gold_load.py` 𝙡𝙤𝙖𝙙𝙨 partitioned + clustered gold tables in BigQuery and writes a log at `data/gold/_logs/imf_gold_load_log.csv`.
 7. `make full` 𝙧𝙪𝙣𝙨 the ingestion batch; quality + gold are `make quality-checks` and `make gold-load`.
 
-**𝘽𝙖𝙩𝙘𝙝 𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣**
+<span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣**</span>
 Batch parameters are passed via `BRUIN_VARS` as JSON. Example:
 `BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"],"dry_run":true,"max_objects":5}'`
 
@@ -297,7 +300,7 @@ BRUIN_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
 BRUIN_VARS='{"overwrite":true}' make promote-silver
 ```
 
-**𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣 & 𝙇𝙤𝙜𝙨 𝙇𝙤𝙘𝙖𝙩𝙞𝙤𝙣𝙨**
+<span style="color:#0B2D5C;">**𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣 & 𝙇𝙤𝙜𝙨 𝙇𝙤𝙘𝙖𝙩𝙞𝙤𝙣𝙨**</span>
 Configuration files:
 - Silver transforms: `bruin/pipeline/config/silver_transforms.json`
 - Data quality checks: `bruin/pipeline/config/quality_checks.json`
