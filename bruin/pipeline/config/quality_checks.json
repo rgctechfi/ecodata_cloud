@@ -1,16 +1,42 @@
 {
   "default": {
-    "required_columns": ["country"],
-    "not_null_columns": ["country"],
-    "numeric_columns": ["year", "value"],
+    "required_columns": ["country", "country_label", "year", "id_countryear"],
+    "not_null_columns": ["country", "year", "id_countryear"],
+    "numeric_columns": ["year"],
+    "unique_columns": ["id_countryear"],
     "min_year": 1960,
     "max_year": 2035
   },
   "datasets": {
     "countries": {
-      "required_columns": ["country", "label"],
-      "not_null_columns": ["country", "label"],
-      "numeric_columns": []
+      "required_columns": ["country", "country_label", "year", "id_countryear"],
+      "not_null_columns": ["country", "country_label", "year", "id_countryear"],
+      "numeric_columns": ["year"],
+      "unique_columns": ["id_countryear"]
+    },
+    "gdp_per_capita_usd": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_per_capita_usd_usd_per_capita"],
+      "numeric_columns": ["year", "gdp_per_capita_usd_usd_per_capita"]
+    },
+    "gdp_per_capita_ppp": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_per_capita_ppp_international_dollars_per_capita"],
+      "numeric_columns": ["year", "gdp_per_capita_ppp_international_dollars_per_capita"]
+    },
+    "gdp_ppp_world_share": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_ppp_world_share_percent_world"],
+      "numeric_columns": ["year", "gdp_ppp_world_share_percent_world"]
+    },
+    "unemployment_rate": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "unemployment_rate_percent_labor_force"],
+      "numeric_columns": ["year", "unemployment_rate_percent_labor_force"]
+    },
+    "public_debt_gdp": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "public_debt_gdp_percent_gdp"],
+      "numeric_columns": ["year", "public_debt_gdp_percent_gdp"]
+    },
+    "inflation_avg_consumer": {
+      "required_columns": ["country", "country_label", "year", "id_countryear", "inflation_avg_consumer_percent_change"],
+      "numeric_columns": ["year", "inflation_avg_consumer_percent_change"]
     }
   }
 }

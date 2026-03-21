@@ -31,7 +31,7 @@ This stack is intentionally lightweight: minimal tools, no dbt, and a focus on P
 
 What is a Makefile ? 
 It is basically a tiny “task runner” that lets us run common project commands with short, memorable names. 
-Makefile is better when you have multiple tasks with dependencies and want a standard interface (e.g., make full, make gold-load).
+Makefile is better when you have multiple tasks with dependencies and want a standard interface (e.g., make full, make gold-full).
 .sh is better for a single long script or when you need more complex logic.
 
 <span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙗𝙡𝙚𝙢**</span>
@@ -43,7 +43,7 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 - Orchestration: Bruin (CLI-driven batch runs)
 - Data lake: Google Cloud Storage (bronze + silver)
 - Data warehouse: BigQuery (gold dataset)
-- Transformations/Quality: Bruin (Python assets) + optional SQL in BigQuery
+- Transformations/Quality: Bruin (Python assets) + BigQuery SQL for the Gold OBT query
 - Dashboard: Looker Studio
 - Languages: Python, SQL
 
@@ -61,7 +61,7 @@ Provide a clean, repeatable pipeline that aggregates macroeconomic indicators ac
 4. 𝙋𝙧𝙤𝙢𝙤𝙩𝙚 Parquet to GCS silver: `gs://ecodatacloud-ds-silver/parquet`
 5. 𝙍𝙪𝙣 Bruin data quality checks on silver (GCS)
 6. 𝙇𝙤𝙖𝙙 partitioned + clustered gold tables in BigQuery (google-cloud-bigquery)
-7. 𝙏𝙧𝙖𝙣𝙨𝙛𝙤𝙧𝙢 into BigQuery tables (gold models) (optional, later)
+7. 𝘽𝙪𝙞𝙡𝙙 the Gold OBT with a Bruin Python asset that executes a BigQuery SQL query
 8. 𝘽𝙪𝙞𝙡𝙙 a dashboard with at least two tiles (planned)
 
 ### <span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘿𝘼𝙂**</span>
@@ -73,15 +73,17 @@ graph TD
   D --> E["Promote to Silver and transforms - Bruin"]
   E --> F["Quality checks on Silver - Bruin"]
   F --> G["Load Gold tables - BigQuery - google-cloud-bigquery"]
+  G --> H["Build Gold OBT - Bruin Python + BigQuery SQL"]
 ```
 Each arrow means “this step depends on the previous one”; read the flow from left to right.
 
 ### <span style="color:#0B2D5C;">**𝙋𝙖𝙧𝙩𝙞𝙩𝙞𝙤𝙣𝙞𝙣𝙜 & 𝘾𝙡𝙪𝙨𝙩𝙚𝙧𝙞𝙣𝙜 (𝘽𝙞𝙜 𝙌𝙪𝙚𝙧𝙮 - 𝙂𝙤𝙡𝙙 𝙡𝙖𝙮𝙚𝙧)**</span>
 Gold tables are created with partitioning and clustering that match typical upstream queries:
 1. 𝙋𝙖𝙧𝙩𝙞𝙩𝙞𝙤𝙣 by `year` (range partitioning) to prune scans for time-window queries.
-2. 𝘾𝙡𝙪𝙨𝙩𝙚𝙧 by `country` to accelerate country filters and country-level aggregates.
-3. 𝙁𝙤𝙧 the `countries` dimension table, we skip partitioning (small table) and cluster by `country` for fast joins.
-4. 𝙏𝙝𝙚𝙨𝙚 choices map to expected queries like “trend by country over a time range” and “compare countries by indicator”.
+2. 𝘾𝙡𝙪𝙨𝙩𝙚𝙧 indicator gold tables by `country` to accelerate country filters and country-level aggregates during intermediate modeling.
+3. 𝙁𝙤𝙧 the `countries` gold table, we skip partitioning (small table) and cluster by `country` for fast joins.
+4. 𝙁𝙤𝙧 the final `gold__obt` table, we still partition by `year`, but we cluster by `country_label` because the final business-facing table intentionally hides technical fields such as `country` and `id_countryear`.
+5. 𝙏𝙝𝙚𝙨𝙚 choices map to expected queries like “trend by country over a time range” and “compare countries by indicator”.
 
 ---
 

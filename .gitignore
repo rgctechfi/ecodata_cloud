@@ -36,3 +36,6 @@ data/parquet/**
 .gcloud/
 .config/gcloud/
 ./crednetials/
+
+# Testing folder
+.TEST/

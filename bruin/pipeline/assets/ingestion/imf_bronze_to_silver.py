@@ -37,13 +37,13 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
-    raw = os.environ.get("BRUIN_VARS", "")
+    raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("BRUIN_VARS is not valid JSON.") from exc
+        raise ValueError("ECODATA_VARS is not valid JSON.") from exc
 
 
 def parse_bool(value: Any) -> bool:
@@ -75,7 +75,11 @@ def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
 
 
 def default_transform_config() -> dict[str, Any]:
-    return {"default": {"drop_columns": [], "rename_columns": {}}, "datasets": {}}
+    return {
+        "default": {"drop_columns": [], "rename_columns": {}},
+        "datasets": {},
+        "enrichments": {},
+    }
 
 
 def load_transform_config(project_root: Path, override_path: str | None) -> dict[str, Any]:
@@ -93,11 +97,16 @@ def load_transform_config(project_root: Path, override_path: str | None) -> dict
 
     payload.setdefault("default", {})
     payload.setdefault("datasets", {})
+    payload.setdefault("enrichments", {})
     if not isinstance(payload["default"], dict) or not isinstance(payload["datasets"], dict):
         raise ValueError("Transform config keys 'default' and 'datasets' must be objects.")
+    if not isinstance(payload["enrichments"], dict):
+        raise ValueError("Transform config key 'enrichments' must be an object.")
 
     payload["default"].setdefault("drop_columns", [])
     payload["default"].setdefault("rename_columns", {})
+    payload["enrichments"].setdefault("country_labels", {})
+    payload["enrichments"].setdefault("id_countryear", {})
     return payload
 
 
@@ -135,6 +144,95 @@ def apply_transforms(
     return frame, {"dropped": dropped, "renamed": rename_columns}
 
 
+def get_enrichment(config: dict[str, Any], key: str, defaults: dict[str, Any]) -> dict[str, Any]:
+    enrichments = config.get("enrichments", {})
+    if isinstance(enrichments.get(key), dict):
+        merged = defaults.copy()
+        merged.update(enrichments[key])
+        return merged
+    return defaults
+
+
+def build_id_countryear(
+    frame: pd.DataFrame, country_col: str, year_col: str, target_col: str, separator: str
+) -> pd.DataFrame:
+    if country_col not in frame.columns or year_col not in frame.columns:
+        return frame
+
+    year_series = pd.to_numeric(frame[year_col], errors="coerce").astype("Int64")
+    valid = frame[country_col].notna() & year_series.notna()
+    id_series = pd.Series([pd.NA] * len(frame), index=frame.index, dtype="object")
+    id_series.loc[valid] = (
+        frame.loc[valid, country_col].astype(str).str.strip()
+        + separator
+        + year_series.loc[valid].astype(str)
+    )
+    frame[target_col] = id_series
+    return frame
+
+
+def expand_countries_years(
+    frame: pd.DataFrame,
+    country_col: str,
+    label_col: str,
+    year_col: str,
+    start_year: int,
+    end_year: int,
+) -> pd.DataFrame:
+    if country_col not in frame.columns:
+        return frame
+
+    if label_col not in frame.columns:
+        frame[label_col] = pd.NA
+
+    base = frame[[country_col, label_col]].dropna(subset=[country_col]).drop_duplicates()
+    years = pd.DataFrame({year_col: list(range(start_year, end_year + 1))})
+    base["_key"] = 1
+    years["_key"] = 1
+    expanded = base.merge(years, on="_key").drop(columns="_key")
+    return expanded
+
+
+def load_countries_lookup(
+    client: storage.Client,
+    bronze_bucket: storage.Bucket,
+    prefix: str,
+    transform_config: dict[str, Any],
+    label_cfg: dict[str, Any],
+) -> dict[str, str]:
+    countries_dataset = str(label_cfg.get("source_dataset", "countries"))
+    country_col = str(label_cfg.get("country_column", "country"))
+    label_col = str(label_cfg.get("label_column", "label"))
+    target_col = str(label_cfg.get("target_column", "country_label"))
+
+    for blob in client.list_blobs(bronze_bucket, prefix=prefix):
+        if not blob.name.endswith(".parquet") or "/_logs/" in blob.name:
+            continue
+        if Path(blob.name).stem != countries_dataset:
+            continue
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "countries.parquet"
+            blob.download_to_filename(tmp_path)
+            frame = pd.read_parquet(tmp_path)
+
+        frame, _ = apply_transforms(frame, countries_dataset, transform_config)
+
+        label_candidates = [target_col, label_col, "country_label", "label"]
+        label_column = next((col for col in label_candidates if col in frame.columns), None)
+        if label_column is None or country_col not in frame.columns:
+            return {}
+
+        mapping_frame = (
+            frame[[country_col, label_column]]
+            .dropna(subset=[country_col, label_column])
+            .drop_duplicates()
+        )
+        return dict(zip(mapping_frame[country_col], mapping_frame[label_column]))
+
+    return {}
+
+
 def promote_bronze_to_silver() -> None:
     bruin_vars = load_bruin_vars()
 
@@ -152,6 +250,39 @@ def promote_bronze_to_silver() -> None:
     client = storage.Client()
     bronze_bucket = ensure_bucket(client, bronze_bucket_name)
     silver_bucket = ensure_bucket(client, silver_bucket_name)
+
+    label_cfg = get_enrichment(
+        transform_config,
+        "country_labels",
+        {
+            "enabled": True,
+            "source_dataset": "countries",
+            "country_column": "country",
+            "label_column": "label",
+            "target_column": "country_label",
+        },
+    )
+    id_cfg = get_enrichment(
+        transform_config,
+        "id_countryear",
+        {
+            "enabled": True,
+            "country_column": "country",
+            "year_column": "year",
+            "target_column": "id_countryear",
+            "separator": "_",
+        },
+    )
+
+    countries_lookup: dict[str, str] = {}
+    if parse_bool(label_cfg.get("enabled", True)):
+        countries_lookup = load_countries_lookup(
+            client,
+            bronze_bucket,
+            prefix,
+            transform_config,
+            label_cfg,
+        )
 
     run_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     logs: list[dict[str, Any]] = []
@@ -229,6 +360,61 @@ def promote_bronze_to_silver() -> None:
                     column_count_before = int(frame.shape[1])
 
                     frame, _ = apply_transforms(frame, dataset_name, transform_config)
+
+                    # Apply enrichment logic based on transform config.
+                    if dataset_name == str(label_cfg.get("source_dataset", "countries")):
+                        # Drop rows with missing country labels (e.g., ATI/ATL) before expansion.
+                        label_col = str(label_cfg.get("target_column", "country_label"))
+                        if label_col in frame.columns:
+                            frame = frame[frame[label_col].notna()].copy()
+
+                        # Expand countries across a fixed year range when configured.
+                        dataset_cfg = transform_config.get("datasets", {}).get(dataset_name, {})
+                        year_range = dataset_cfg.get("expand_year_range")
+                        if isinstance(year_range, dict):
+                            start_year = parse_int(year_range.get("start"))
+                            end_year = parse_int(year_range.get("end"))
+                            if start_year is not None and end_year is not None:
+                                frame = expand_countries_years(
+                                    frame,
+                                    str(label_cfg.get("country_column", "country")),
+                                    label_col,
+                                    str(id_cfg.get("year_column", "year")),
+                                    start_year,
+                                    end_year,
+                                )
+
+                        frame = build_id_countryear(
+                            frame,
+                            str(id_cfg.get("country_column", "country")),
+                            str(id_cfg.get("year_column", "year")),
+                            str(id_cfg.get("target_column", "id_countryear")),
+                            str(id_cfg.get("separator", "_")),
+                        )
+                    else:
+                        if parse_bool(label_cfg.get("enabled", True)):
+                            target_label = str(label_cfg.get("target_column", "country_label"))
+                            country_col = str(label_cfg.get("country_column", "country"))
+                            if target_label in frame.columns:
+                                if countries_lookup:
+                                    frame[target_label] = frame[target_label].fillna(
+                                        frame[country_col].map(countries_lookup)
+                                    )
+                            else:
+                                frame[target_label] = (
+                                    frame[country_col].map(countries_lookup)
+                                    if countries_lookup
+                                    else pd.NA
+                                )
+
+                        if parse_bool(id_cfg.get("enabled", True)):
+                            frame = build_id_countryear(
+                                frame,
+                                str(id_cfg.get("country_column", "country")),
+                                str(id_cfg.get("year_column", "year")),
+                                str(id_cfg.get("target_column", "id_countryear")),
+                                str(id_cfg.get("separator", "_")),
+                            )
                     row_count_after = int(frame.shape[0])
                     column_count_after = int(frame.shape[1])
 

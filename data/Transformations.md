@@ -11,7 +11,7 @@ This document summarizes the transformations applied (or expected) when moving d
 erDiagram
   COUNTRIES {
     string country
-    string country_label
+    string label
   }
 
   GDP_PER_CAPITA_USD {
@@ -162,10 +162,10 @@ Example 1: Compare GDP per capita and unemployment for France in 2020.
 You would join `gdp_per_capita_usd` with `unemployment_rate` on `id_countryear`, where `id_countryear = FRA_2020`.
 
 Example 2: Build a wide view for reporting.
-Start from `countries` (the canonical country-year grid) and INNER JOIN indicator tables on `id_countryear` to align all metrics on the same country-year (dropping rows where a metric is missing).
+Start from `countries` (the canonical country-year grid) and LEFT JOIN indicator tables on `id_countryear` to preserve the full country-year backbone, even when one metric is missing.
 
 Example 3: Combine with labels for readability.
-Use `country_label` from the `countries` table so the reporting layer always uses consistent country names.
+Use `country_label` from the `countries` table so the reporting layer always uses consistent country names, while keeping technical join fields out of the final business-facing table.
 
 ## Gold Layer
 - Gold tables are built by joining Silver indicator tables to the `countries` table on `id_countryear`.
@@ -175,16 +175,15 @@ Use `country_label` from the `countries` table so the reporting layer always use
 The Gold layer exposes a single wide table that combines all Silver indicators into one dataset.
 
 **Join logic (Silver → Gold OBT)**
-- Grain: one row per `id_countryear` (country + year).
+- Grain during construction: one row per `id_countryear` (country + year).
 - Base table: `countries` (the canonical grid for 1980–2030).
-- Inner join each indicator table on `id_countryear` so the OBT contains only country-years that exist in both `countries` and the indicator table.
-- `country_label` always comes from `countries`.
-- Result: a single wide table with all indicators aligned by country-year.
+- Left join each indicator table on `id_countryear` so the OBT preserves the full canonical country-year grid from `countries`.
+- `country_label` and `year` come from `countries`.
+- `id_countryear` and `country` are used internally for joins, but they are intentionally removed from the final OBT because they are technical fields.
+- Result: a single wide, business-friendly table with all indicators aligned by country-year.
 
 | Column | Description |
 | --- | --- |
-| `id_countryear` | Concatenation of `country` + `year`. |
-| `country` | Country code (join key). |
 | `country_label` | Full country name from the `countries` table. |
 | `year` | Year of the indicator value. |
 | `gdp_per_capita_usd_usd_per_capita` | GDP per capita, current prices (USD per capita). |

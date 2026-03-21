@@ -1,13 +1,13 @@
 SHELL := /bin/bash
-BRUIN_VARS ?=
-export BRUIN_VARS
-# BRUIN_VARS is a JSON string passed to Bruin assets.
+ECODATA_VARS ?=
+export ECODATA_VARS
+# ECODATA_VARS is a JSON string passed to Bruin assets.
 # Examples:
-#   BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
-#   BRUIN_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
-#   BRUIN_VARS='{"overwrite":true}' make promote-silver
+#   ECODATA_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
+#   ECODATA_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
+#   ECODATA_VARS='{"overwrite":true}' make promote-silver
 
-.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver quality-checks gold-load full init-to-bronze
+.PHONY: help auth-check terraform-init terraform-fmt terraform-validate terraform-plan terraform-apply provision bruin-extract bruin-convert ingest-bronze promote-silver quality-checks gold-load gold-obt gold-full full init-to-bronze
 
 help:
 	@echo "Targets:"
@@ -19,6 +19,8 @@ help:
 	@echo "  make promote-silver # copy bronze parquet objects to the silver bucket"
 	@echo "  make quality-checks # run Bruin data quality checks on silver"
 	@echo "  make gold-load     # load partitioned + clustered gold tables"
+	@echo "  make gold-obt      # execute the SQL transformation for the One Big Table"
+	@echo "  make gold-full     # load gold tables and run the OBT transformation"
 	@echo "  make full         # provision infra, extract, convert, upload, promote to silver"
 	@echo "  make init-to-bronze # provision + extract + convert + upload (no silver promotion)"
 	@echo "  make terraform-plan/terraform-apply/terraform-validate"
@@ -62,6 +64,11 @@ quality-checks: auth-check
 
 gold-load: auth-check
 	bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py
+
+gold-obt: auth-check
+	bruin run bruin/pipeline/assets/gold/gold_obt.py
+
+gold-full: gold-load gold-obt
 
 full: provision bruin-extract bruin-convert ingest-bronze promote-silver
 

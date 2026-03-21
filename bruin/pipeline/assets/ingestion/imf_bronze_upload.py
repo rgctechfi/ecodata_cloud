@@ -34,13 +34,13 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
-    raw = os.environ.get("BRUIN_VARS", "")
+    raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("BRUIN_VARS is not valid JSON.") from exc
+        raise ValueError("ECODATA_VARS is not valid JSON.") from exc
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:

@@ -36,13 +36,13 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
-    raw = os.environ.get("BRUIN_VARS", "")
+    raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("BRUIN_VARS is not valid JSON.") from exc
+        raise ValueError("ECODATA_VARS is not valid JSON.") from exc
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:
@@ -71,17 +71,19 @@ def parse_int(value: Any) -> int | None:
 def default_quality_config() -> dict[str, Any]:
     return {
         "default": {
-            "required_columns": ["country"],
-            "not_null_columns": ["country"],
+            "required_columns": ["country", "country_label", "year", "value", "id_countryear"],
+            "not_null_columns": ["country", "year", "id_countryear"],
             "numeric_columns": ["year", "value"],
+            "unique_columns": ["id_countryear"],
             "min_year": 1960,
             "max_year": 2035,
         },
         "datasets": {
             "countries": {
-                "required_columns": ["country", "label"],
-                "not_null_columns": ["country", "label"],
-                "numeric_columns": [],
+                "required_columns": ["country", "country_label", "year", "id_countryear"],
+                "not_null_columns": ["country", "country_label", "year", "id_countryear"],
+                "numeric_columns": ["year"],
+                "unique_columns": ["id_countryear"],
             }
         },
     }
@@ -139,6 +141,7 @@ def merge_checks(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
         "required_columns": pick_list(dataset_cfg, "required_columns", pick_list(defaults, "required_columns", [])),
         "not_null_columns": pick_list(dataset_cfg, "not_null_columns", pick_list(defaults, "not_null_columns", [])),
         "numeric_columns": pick_list(dataset_cfg, "numeric_columns", pick_list(defaults, "numeric_columns", [])),
+        "unique_columns": pick_list(dataset_cfg, "unique_columns", pick_list(defaults, "unique_columns", [])),
         "min_year": pick_int(dataset_cfg, "min_year", pick_int(defaults, "min_year", None)),
         "max_year": pick_int(dataset_cfg, "max_year", pick_int(defaults, "max_year", None)),
     }
@@ -167,6 +170,15 @@ def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
         invalid = int(series.isna().sum() - frame[col].isna().sum())
         if invalid > 0:
             issues.append(f"non_numeric_{col}={invalid}")
+
+    for col in checks["unique_columns"]:
+        if col not in columns:
+            issues.append(f"missing_unique_{col}")
+            continue
+        series = frame[col].dropna()
+        dup_count = int(series.duplicated().sum())
+        if dup_count > 0:
+            issues.append(f"duplicates_{col}={dup_count}")
 
     if "year" in columns and (checks["min_year"] is not None or checks["max_year"] is not None):
         year_series = pd.to_numeric(frame["year"], errors="coerce")

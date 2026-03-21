@@ -60,6 +60,14 @@ def build_url(base_url: str, periods: list[str] | None) -> str:
     return f"{base_url}{separator}periods={period_str}"
 
 
+def load_runtime_vars() -> dict:
+    raw = os.environ.get("ECODATA_VARS") or os.environ.get("BRUIN_VARS") or "{}"
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("ECODATA_VARS/BRUIN_VARS is not valid JSON.") from exc
+
+
 def run_extract() -> None:
     project_root = resolve_project_root()
     data_raw = project_root / "data" / "raw"
@@ -92,7 +100,7 @@ def run_extract() -> None:
         "countries": (path_countries, url_countries),
     }
 
-    bruin_vars = json.loads(os.environ.get("BRUIN_VARS", "{}"))
+    bruin_vars = load_runtime_vars()
     datasets_filter = bruin_vars.get("datasets")
     periods = bruin_vars.get("periods")
 

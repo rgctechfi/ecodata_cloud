@@ -37,13 +37,13 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
-    raw = os.environ.get("BRUIN_VARS", "")
+    raw = os.environ.get("ECODATA_VARS") or os.environ.get("BRUIN_VARS", "")
     if not raw:
         return {}
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("BRUIN_VARS is not valid JSON.") from exc
+        raise ValueError("ECODATA_VARS/BRUIN_VARS is not valid JSON.") from exc
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:
@@ -126,15 +126,9 @@ def ensure_dataset(client: bigquery.Client, dataset_id: str, location: str | Non
 
 
 def table_name_from_blob(blob_name: str, prefix: str, table_prefix: str) -> str:
-    name = blob_name
-    if prefix and name.startswith(prefix):
-        name = name[len(prefix) :]
-    name = name.lstrip("/")
-    if name.endswith(".parquet"):
-        name = name[: -len(".parquet")]
-    parts = [part for part in name.split("/") if part]
-    suffix = "__".join(parts) if parts else "unknown"
-    return f"{table_prefix}{suffix}"
+    # Ne conserve que le nom du fichier (sans les dossiers)
+    stem = Path(blob_name).stem
+    return f"{table_prefix}{stem}"
 
 
 def build_partitioning(config: dict[str, Any], columns: set[str]) -> bigquery.RangePartitioning | None:

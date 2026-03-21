@@ -3,5 +3,61 @@
     "drop_columns": [],
     "rename_columns": {}
   },
-  "datasets": {}
+  "datasets": {
+    "countries": {
+      "rename_columns": {
+        "label": "country_label"
+      },
+      "expand_year_range": {
+        "start": 1980,
+        "end": 2030
+      }
+    },
+    "gdp_per_capita_usd": {
+      "rename_columns": {
+        "value": "gdp_per_capita_usd_usd_per_capita"
+      }
+    },
+    "gdp_per_capita_ppp": {
+      "rename_columns": {
+        "value": "gdp_per_capita_ppp_international_dollars_per_capita"
+      }
+    },
+    "gdp_ppp_world_share": {
+      "rename_columns": {
+        "value": "gdp_ppp_world_share_percent_world"
+      }
+    },
+    "unemployment_rate": {
+      "rename_columns": {
+        "value": "unemployment_rate_percent_labor_force"
+      }
+    },
+    "public_debt_gdp": {
+      "rename_columns": {
+        "value": "public_debt_gdp_percent_gdp"
+      }
+    },
+    "inflation_avg_consumer": {
+      "rename_columns": {
+        "value": "inflation_avg_consumer_percent_change"
+      }
+    }
+  },
+  "enrichments": {
+    "country_labels": {
+      "enabled": true,
+      "source_dataset": "countries",
+      "country_column": "country",
+      "label_column": "label",
+      "target_column": "country_label"
+    },
+    "id_countryear": {
+      "enabled": true,
+      "country_column": "country",
+      "year_column": "year",
+      "target_column": "id_countryear",
+      "separator": "_"
+    }
+  }
 }

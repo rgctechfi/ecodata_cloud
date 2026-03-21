@@ -7,26 +7,63 @@ This guide shows two complete paths (manual bash or Makefile) to run the pipelin
 ## <span style="color:#0B2D5C;">**𝘽𝙚𝙛𝙤𝙧𝙚 𝙔𝙤𝙪 𝙎𝙩𝙖𝙧𝙩**</span>
 Make sure the environment and infrastructure are ready by following `Setup.md` (GCP/IAM + Terraform + auth).
 
+## <span style="color:#0B2D5C;">**𝙀𝙣𝙙-𝙩𝙤-𝙀𝙣𝙙 𝙊𝙧𝙙𝙚𝙧**</span>
+Run the pipeline in this order:
+1. Provision infrastructure with Terraform.
+2. Extract IMF data and build local Parquet files.
+3. Upload Parquet to the Bronze bucket.
+4. Promote Bronze data to the Silver bucket with transformations.
+5. Run Silver quality checks.
+6. Load Gold tables into BigQuery.
+7. Build the Gold One Big Table (OBT).
+8. Run verification queries.
+
 ## <span style="color:#0B2D5C;">**𝙊𝙥𝙩𝙞𝙤𝙣 𝘼 — 𝙈𝙖𝙣𝙪𝙖𝙡 𝘽𝙖𝙨𝙝 (𝙛𝙧𝙤𝙢 𝙯𝙚𝙧𝙤 𝙩𝙤 𝙛𝙞𝙣𝙞𝙨𝙝)**</span>
+1. Provision infrastructure:
 ```bash
 terraform -chdir=terraform init
 terraform -chdir=terraform plan
 terraform -chdir=terraform apply
+```
 
+2. Run the ingestion pipeline up to Silver:
+```bash
 bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py
 bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py
 bruin run bruin/pipeline/assets/ingestion/imf_bronze_upload.py
 bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py
+```
+
+3. Validate Silver:
+```bash
 bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py
+```
+
+4. Build Gold:
+```bash
 bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py
+bruin run bruin/pipeline/assets/gold/gold_obt.py
 ```
 
 ## <span style="color:#0B2D5C;">**𝙊𝙥𝙩𝙞𝙤𝙣 𝘽 — 𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 (𝙛𝙧𝙤𝙢 𝙯𝙚𝙧𝙤 𝙩𝙤 𝙛𝙞𝙣𝙞𝙨𝙝)**</span>
+1. Provision infrastructure:
 ```bash
 make provision
+```
+
+2. Run the pipeline up to Silver:
+```bash
 make full
+```
+
+3. Validate Silver:
+```bash
 make quality-checks
-make gold-load
+```
+
+4. Build Gold:
+```bash
+make gold-full
 ```
 
 ## <span style="color:#0B2D5C;">**𝙋𝙞𝙥𝙚𝙡𝙞𝙣𝙚 𝙍𝙪𝙣𝙗𝙤𝙤𝙠**</span>
@@ -36,6 +73,21 @@ make gold-load
 4. Promote Parquet from bronze to silver: `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
 5. Run Bruin quality checks on silver: `bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py`
 6. Load gold tables in BigQuery: `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
+7. Build the Gold OBT in BigQuery: `bruin run bruin/pipeline/assets/gold/gold_obt.py`
+
+## <span style="color:#0B2D5C;">**𝙑𝙚𝙧𝙞𝙛𝙮 𝙏𝙝𝙚 𝙍𝙪𝙣**</span>
+Use these commands after the pipeline finishes:
+
+```bash
+bq ls ecodatacloud:ecodatacloud_bq_gold
+
+bq query --use_legacy_sql=false \
+'SELECT * FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt` LIMIT 5'
+
+bq query --use_legacy_sql=false \
+'SELECT COUNT(*) AS row_count, COUNT(DISTINCT country_label) AS distinct_countries
+FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
+```
 
 ## <span style="color:#0B2D5C;">**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**</span>
 - `make auth-check`: verify gcloud and ADC authentication
@@ -46,6 +98,8 @@ make gold-load
 - `make promote-silver`: copy bronze parquet objects to the silver bucket
 - `make quality-checks`: run Bruin data quality checks on silver
 - `make gold-load`: load partitioned + clustered gold tables
+- `make gold-obt`: build the Gold OBT in BigQuery
+- `make gold-full`: run `make gold-load` then `make gold-obt`
 - `make full`: provision + extract + convert + upload + promote to silver
 - `make init-to-bronze`: provision + extract + convert + upload (no silver promotion)
 
@@ -58,24 +112,32 @@ make gold-load
 - `make promote-silver` → `bruin run bruin/pipeline/assets/ingestion/imf_bronze_to_silver.py`
 - `make quality-checks` → `bruin run bruin/pipeline/assets/ingestion/imf_quality_checks.py`
 - `make gold-load` → `bruin run bruin/pipeline/assets/ingestion/imf_gold_load.py`
+- `make gold-obt` → `bruin run bruin/pipeline/assets/gold/gold_obt.py`
+- `make gold-full` → `make gold-load` + `make gold-obt`
 
-## <span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣 (𝘽𝙧𝙪𝙞𝙣 𝙑𝙖𝙧𝙨)**</span>
-Batch parameters are passed via `BRUIN_VARS` as JSON. Example:
-`BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"],"dry_run":true,"max_objects":5}'`
+## <span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣 (𝙘𝙤𝙙𝙖𝙩𝙖 𝙑𝙖𝙧𝙨)**</span>
+Batch parameters are passed via `ECODATA_VARS` as JSON. Example:
+`ECODATA_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"],"dry_run":true,"max_objects":5}'`
 
-Using `make` with BRUIN_VARS:
-`BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"]}' make full`
+Using `make` with ECODATA_VARS:
+`ECODATA_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2019","2020"]}' make full`
+
+**Why and when to use `overwrite`?**
+By default, the pipeline skips files that already exist in the Bronze and Silver buckets to optimize execution. If you update your transformation rules (`silver_transforms.json`) or your data models, the existing files won't be updated automatically. You must pass `"overwrite": true` to force the pipeline to replace the old data with the newly transformed files.
 
 Examples:
 ```bash
 # Full run with a subset of datasets/years
-BRUIN_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
+ECODATA_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
 
 # Quick quality check test
-BRUIN_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
+ECODATA_VARS='{"dry_run":true,"max_objects":3}' make quality-checks
 
-# Force overwrite during bronze -> silver
-BRUIN_VARS='{"overwrite":true}' make promote-silver
+# Force overwrite during bronze -> silver (Useful after updating transformation rules)
+ECODATA_VARS='{"overwrite":true}' make promote-silver
+
+# Force overwrite for the entire pipeline
+ECODATA_VARS='{"overwrite":true}' make full
 ```
 
 ## <span style="color:#0B2D5C;">**𝘾𝙤𝙣𝙛𝙞𝙜𝙪𝙧𝙖𝙩𝙞𝙤𝙣 & 𝙇𝙤𝙜𝙨 𝙇𝙤𝙘𝙖𝙩𝙞𝙤𝙣𝙨**</span>
