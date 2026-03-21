@@ -88,4 +88,5 @@ Gold tables are created with partitioning and clustering that match typical upst
 ## <span style="color:#0B2D5C;">**𝘿𝙤𝙘𝙨**</span>
 - `Setup.md`: environment setup, GCP/IAM, and infrastructure provisioning.
 - `Quickstart.md`: two complete paths (manual bash or Makefile) to run the pipeline from zero to finish.
-- `./data/Analysis.md`: Explain the dataset and anomalies
+- `./data/Dataset.md`: Explain the dataset
+- `./data/Transformations.md`: Explain the changes in the silver layer and in the gold layer

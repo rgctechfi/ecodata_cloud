@@ -30,7 +30,6 @@ The indicators below are **macro indicators** unless explicitly stated otherwise
 
 | Indicator label | Code | Unit | What it measures | Key use in this project |
 |---|---|---|---|---|
-| GDP, current prices | NGDPD | Billions of U.S. dollars | Total economic output valued at current prices (nominal). | Compare overall economic size. |
 | GDP per capita, current prices | NGDPDPC | U.S. dollars per capita | Nominal GDP divided by population. | First view of average income level, but affected by price levels. |
 | GDP based on PPP, share of world | PPPSH | Percent of World | Share of world output using purchasing power parity weights. | Compare global economic weight while reducing price-level distortions. |
 | GDP per capita, current prices (PPP) | PPPPC | International dollars per capita | GDP per capita adjusted by PPP (more comparable living standards). | Best for cross-country “who lives better” comparisons. |
