@@ -1,4 +1,4 @@
-<p align="center"><img src="../../ressources/pictures/fmi_logo.jpg" alt="fmi_logo" width="180"></p>
+<p align="center"><img src="../ressources/pictures/fmi_logo.jpg" alt="fmi_logo" width="180"></p>
 
 ### Purpose
 This page provides context for the dataset used in this project and explains the key IMF concepts, the indicators selected, and how to retrieve the data via the IMF DataMapper API.

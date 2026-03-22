@@ -89,6 +89,52 @@ bq query --use_legacy_sql=false \
 FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
 ```
 
+## <a id="clean-restart"></a><span style="color:#0B2D5C;">**𝘾𝙡𝙚𝙖𝙣 𝙍𝙚𝙨𝙩𝙖𝙧𝙩**</span>
+Use this runbook when you want to restart the project from a clean state on an environment that was already used before.
+
+This sequence removes:
+- local generated files (`data/raw`, `data/parquet`, `data/bronze`, `data/silver`, `data/gold`)
+- Bronze and Silver parquet objects in GCS
+- previous exported files in GCS
+- the BigQuery Gold dataset `ecodatacloud_bq_gold`
+
+Warning: this is destructive for generated data and warehouse tables. Do not run it if you want to keep previous outputs.
+
+```bash
+rm -f data/raw/*/*.json data/raw/api_download_log.txt
+rm -rf data/parquet data/bronze data/silver data/gold
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-bronze/parquet/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-bronze/parquet/**"; fi'
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-silver/parquet/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-silver/parquet/**"; fi'
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-silver/exports/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-silver/exports/**"; fi'
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+bq rm -r -f -d ecodatacloud:ecodatacloud_bq_gold
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+TF_CLI_ARGS_apply=-auto-approve make full
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+make quality-checks
+
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+ECODATA_VARS='{"overwrite":true}' make gold-full
+```
+
+At the end of the clean restart, you can validate the final table with:
+
+```bash
+env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
+bq query --use_legacy_sql=false \
+'SELECT COUNT(*) AS row_count, COUNT(DISTINCT country_label) AS distinct_country_labels
+FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
+```
+
 ## <span style="color:#0B2D5C;">**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**</span>
 - `make auth-check`: verify gcloud and ADC authentication
 - `make provision`: Terraform init + plan + apply
