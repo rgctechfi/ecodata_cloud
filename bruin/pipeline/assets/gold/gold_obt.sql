@@ -9,15 +9,15 @@ SELECT
   infl.inflation_avg_consumer_percent_change
 
 FROM `ecodatacloud.ecodatacloud_bq_gold.gold__countries` AS c
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_usd` AS usd 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_usd` AS usd 
   ON c.id_countryear = usd.id_countryear
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_ppp` AS ppp 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_ppp` AS ppp 
   ON c.id_countryear = ppp.id_countryear
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_ppp_world_share` AS share 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_ppp_world_share` AS share 
   ON c.id_countryear = share.id_countryear
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__unemployment_rate` AS unemp 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__unemployment_rate` AS unemp 
   ON c.id_countryear = unemp.id_countryear
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__public_debt_gdp` AS debt 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__public_debt_gdp` AS debt 
   ON c.id_countryear = debt.id_countryear
-LEFT JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__inflation_avg_consumer` AS infl 
+INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__inflation_avg_consumer` AS infl 
   ON c.id_countryear = infl.id_countryear

@@ -35,7 +35,7 @@ data/parquet/**
 **/service-account*.json
 .gcloud/
 .config/gcloud/
-./crednetials/
+./credentials/
 
 # Testing folder
-.TEST/
+TEST/
