@@ -162,14 +162,15 @@ Example 1: Compare GDP per capita and unemployment for France in 2020.
 You would join `gdp_per_capita_usd` with `unemployment_rate` on `id_countryear`, where `id_countryear = FRA_2020`.
 
 Example 2: Build a wide view for reporting.
-Start from `countries` (the canonical country-year grid) and LEFT JOIN indicator tables on `id_countryear` to preserve the full country-year backbone, even when one metric is missing.
+Start from `countries` (the canonical country-year grid) and join indicator tables on `id_countryear`. A `LEFT JOIN` preserves the full backbone even when one metric is missing, while an `INNER JOIN` keeps only complete country-year records. In the current Gold OBT, `INNER JOIN` is selected.
 
 Example 3: Combine with labels for readability.
 Use `country_label` from the `countries` table so the reporting layer always uses consistent country names, while keeping technical join fields out of the final business-facing table.
 
 ## Gold Layer
 - Gold tables are built by joining Silver indicator tables to the `countries` table on `id_countryear`.
-- The goal is to create a single analytics-ready view (OBT) that simplifies downstream reporting (dashboards, tiles, and KPIs).
+- The final Gold OBT uses `INNER JOIN` between `countries` and every indicator table.
+- The goal is to create a single analytics-ready view (OBT) that simplifies downstream reporting (dashboards, tiles, and KPIs) while keeping only complete records.
 
 ### One Big Table (OBT)
 The Gold layer exposes a single wide table that combines all Silver indicators into one dataset.
@@ -177,10 +178,17 @@ The Gold layer exposes a single wide table that combines all Silver indicators i
 **Join logic (Silver → Gold OBT)**
 - Grain during construction: one row per `id_countryear` (country + year).
 - Base table: `countries` (the canonical grid for 1980–2030).
-- Left join each indicator table on `id_countryear` so the OBT preserves the full canonical country-year grid from `countries`.
+- Inner join each indicator table on `id_countryear` so the OBT keeps only country-year combinations present in all indicator tables.
 - `country_label` and `year` come from `countries`.
 - `id_countryear` and `country` are used internally for joins, but they are intentionally removed from the final OBT because they are technical fields.
-- Result: a single wide, business-friendly table with all indicators aligned by country-year.
+- Result: a single wide, business-friendly table with all indicators aligned by country-year and no partially populated rows.
+
+**Why `INNER JOIN` is selected**
+- The OBT is the final business-facing table, so each row is expected to contain the full indicator set used for comparisons and analysis.
+- `INNER JOIN` avoids rows where one or more measures would be null, which makes dashboards, aggregates, and country-to-country comparisons easier to interpret.
+- This choice improves consistency for downstream analysis because every country-year in the OBT has the same metric coverage.
+- Trade-off: the table contains fewer rows than the full `countries` backbone, because country-years with missing indicators are excluded.
+- If the business requirement changed to "keep every country-year even when some indicators are missing", `LEFT JOIN` would become the better option.
 
 | Column | Description |
 | --- | --- |
