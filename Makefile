@@ -1,6 +1,13 @@
 SHELL := /bin/bash
 ECODATA_VARS ?=
+CLOUDSDK_CONFIG ?= $(CURDIR)/.gcloud
+PROJECT_GCP_KEY := $(firstword $(wildcard $(CLOUDSDK_CONFIG)/credentials/*.json))
+ifneq ($(PROJECT_GCP_KEY),)
+GOOGLE_APPLICATION_CREDENTIALS ?= $(PROJECT_GCP_KEY)
+endif
 export ECODATA_VARS
+export CLOUDSDK_CONFIG
+export GOOGLE_APPLICATION_CREDENTIALS
 # ECODATA_VARS is a JSON string passed to Bruin assets.
 # Examples:
 #   ECODATA_VARS='{"datasets":["gdp_per_capita_usd"],"periods":["2020"]}' make full
@@ -11,7 +18,7 @@ export ECODATA_VARS
 
 help:
 	@echo "Targets:"
-	@echo "  make auth-check  # verify gcloud + ADC authentication"
+	@echo "  make auth-check  # verify gcloud + ADC or service-account authentication"
 	@echo "  make provision   # terraform init + apply (creates GCP resources)"
 	@echo "  make bruin-extract # extract IMF API data into JSON"
 	@echo "  make bruin-convert # run the Bruin asset to convert JSON to Parquet"
@@ -27,8 +34,14 @@ help:
 
 auth-check:
 	@command -v gcloud >/dev/null 2>&1 || (echo "gcloud is not installed. Install Google Cloud CLI first." && exit 1)
-	@gcloud auth application-default print-access-token >/dev/null 2>&1 || (echo "ADC not configured. Run: gcloud auth application-default login" && exit 1)
-	@echo "GCP auth OK. Active project: $$(gcloud config get-value project 2>/dev/null)"
+	@if [ -n "$$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$$GOOGLE_APPLICATION_CREDENTIALS" ]; then \
+		gcloud auth activate-service-account --quiet --key-file="$$GOOGLE_APPLICATION_CREDENTIALS" >/dev/null 2>&1 || (echo "Service account auth failed. Check GOOGLE_APPLICATION_CREDENTIALS." && exit 1); \
+		gcloud auth print-access-token >/dev/null 2>&1 || (echo "Service account token retrieval failed." && exit 1); \
+		echo "GCP auth OK (service account key). Active project: $$(gcloud config get-value project 2>/dev/null)"; \
+	else \
+		gcloud auth application-default print-access-token >/dev/null 2>&1 || (echo "ADC not configured. Run: gcloud auth application-default login or set GOOGLE_APPLICATION_CREDENTIALS." && exit 1); \
+		echo "GCP auth OK (ADC). Active project: $$(gcloud config get-value project 2>/dev/null)"; \
+	fi
 
 terraform-init:
 	terraform -chdir=terraform init

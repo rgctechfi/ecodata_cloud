@@ -20,65 +20,42 @@ uv pip install -r bruin/pipeline/assets/ingestion/requirements.txt
 ```
 
 ## <span style="color:#0B2D5C;">**𝙂𝘾𝙋 𝘼𝙪𝙩𝙝**</span>
-1. `gcloud auth application-default login`
-2. `gcloud config set project ecodatacloud`
-3. `gcloud auth application-default print-access-token`
+Supported local auth modes:
+1. User ADC:
+   `gcloud auth application-default login`
+   `gcloud config set project ecodatacloud`
+   `gcloud auth application-default print-access-token`
+2. Service account key:
+   `export CLOUDSDK_CONFIG="$(pwd)/.gcloud"`
+   `export GOOGLE_APPLICATION_CREDENTIALS="$(find "$(pwd)/.gcloud/credentials" -maxdepth 1 -name '*.json' | head -n 1)"`
+
+In the current repository setup:
+- `make` targets always use the repo-local GCP config in `.gcloud`.
+- If a key file exists under `.gcloud/credentials/*.json`, `make` exports `GOOGLE_APPLICATION_CREDENTIALS` automatically.
+- Otherwise, `make` falls back to your user ADC session.
+- Direct `bruin`, `bq`, `gsutil`, and `terraform` commands use whatever auth is active in your current shell.
 
 ## <span style="color:#0B2D5C;">**𝙄𝘼𝙈 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩𝙨**</span>
-User/Owner account (used by Terraform when it manages IAM): `roles/owner` (or equivalent admin permissions).
+User/Owner account (used to run Terraform and manage project resources): `roles/owner` (or equivalent admin permissions).
 
-Service account `bruin-ingestor@ecodatacloud.iam.gserviceaccount.com` (used by Bruin assets) requires:
-- `roles/storage.admin`
+Service account `bruin-ingestor@ecodatacloud.iam.gserviceaccount.com` is provisioned by Terraform for the project, but it is **not** the credential used by local Bruin runs unless you explicitly wire it into the runtime yourself.
+
+Terraform currently grants this service account:
 - `roles/storage.objectAdmin`
-- `roles/bigquery.dataOwner` (needed for dataset updates)
 - `roles/bigquery.dataEditor`
-- `roles/iam.serviceAccountAdmin`
-- `roles/resourcemanager.projectIamAdmin`
-- `roles/serviceusage.serviceUsageAdmin`
 
-Required APIs (enable once in the project):
-- `serviceusage.googleapis.com`
-- `cloudresourcemanager.googleapis.com`
+Required APIs managed by Terraform in this project:
 - `iam.googleapis.com`
 - `storage.googleapis.com`
 - `bigquery.googleapis.com`
 
 ## <span style="color:#0B2D5C;">**𝙒𝙝𝙮 𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢 𝙈𝙪𝙨𝙩 𝙍𝙪𝙣 𝙒𝙞𝙩𝙝 𝙩𝙝𝙚 𝙊𝙬𝙣𝙚𝙧 𝘼𝙘𝙘𝙤𝙪𝙣𝙩**</span>
-Terraform creates and manages IAM bindings and project-level resources (service account roles, APIs, buckets, and BigQuery dataset). Those changes require Owner-level permissions. If you run Terraform with the service account, you can easily end up in a permission loop where the account does not yet have the rights it needs to grant itself. Using your Owner ADC account avoids that bootstrap problem and keeps IAM changes auditable. Bruin assets still run with the service account at execution time.
+Terraform creates and manages IAM bindings and project-level resources (service account, enabled APIs, buckets, and BigQuery dataset). Those changes require Owner-level permissions. If you run Terraform with the service account, you can end up in a bootstrap problem where the account does not yet have the rights it needs. Using your Owner/admin ADC account avoids that loop and keeps IAM changes auditable.
 
-IAM setup commands (run once with an Owner account):
-```bash
-gcloud auth login
-gcloud config set project ecodatacloud
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/storage.admin
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/storage.objectAdmin
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/bigquery.dataOwner
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/bigquery.dataEditor
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/iam.serviceAccountAdmin
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/resourcemanager.projectIamAdmin
-
-gcloud projects add-iam-policy-binding ecodatacloud \
-  --member=serviceAccount:bruin-ingestor@ecodatacloud.iam.gserviceaccount.com \
-  --role=roles/serviceusage.serviceUsageAdmin
-```
+In the current repository setup:
+- Terraform is run with your admin-capable account.
+- `make` targets can use either your ADC session or the repo-local service account key.
+- The `bruin-ingestor` service account is provisioned for infrastructure consistency and optional future automation.
 
 ## <span style="color:#0B2D5C;">**𝘽𝙞𝙡𝙡𝙞𝙣𝙜 𝙍𝙚𝙦𝙪𝙞𝙧𝙚𝙢𝙚𝙣𝙩**</span>
 GCS buckets require an active billing account. If you see:

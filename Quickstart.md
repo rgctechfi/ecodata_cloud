@@ -7,6 +7,26 @@ This guide shows two complete paths (manual bash or Makefile) to run the pipelin
 ## <span style="color:#0B2D5C;">**𝘽𝙚𝙛𝙤𝙧𝙚 𝙔𝙤𝙪 𝙎𝙩𝙖𝙧𝙩**</span>
 Make sure the environment and infrastructure are ready by following `Setup.md` (GCP/IAM + Terraform + auth).
 
+## <span style="color:#0B2D5C;">**𝘼𝙘𝙘𝙚𝙨𝙨 𝙎𝙚𝙩𝙪𝙥**</span>
+Two auth modes are supported in this project:
+
+1. User ADC
+```bash
+gcloud auth application-default login
+gcloud config set project ecodatacloud
+gcloud auth application-default print-access-token
+```
+
+2. Repo-local service account key
+```bash
+export CLOUDSDK_CONFIG="$(pwd)/.gcloud"
+export GOOGLE_APPLICATION_CREDENTIALS="$(find "$(pwd)/.gcloud/credentials" -maxdepth 1 -name '*.json' | head -n 1)"
+```
+
+Use the service account setup above before running the manual CLI path with `bruin`, `bq`, `gsutil`, or `terraform`.
+
+`make` targets already handle this automatically when a key is present in `.gcloud/credentials`.
+
 ## <span style="color:#0B2D5C;">**𝙀𝙣𝙙-𝙩𝙤-𝙀𝙣𝙙 𝙊𝙧𝙙𝙚𝙧**</span>
 Run the pipeline in this order:
 1. Provision infrastructure with Terraform.
@@ -46,22 +66,19 @@ bruin run bruin/pipeline/assets/gold/gold_obt.py
 ```
 
 ## <span style="color:#0B2D5C;">**𝙊𝙥𝙩𝙞𝙤𝙣 𝘽 — 𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 (𝙛𝙧𝙤𝙢 𝙯𝙚𝙧𝙤 𝙩𝙤 𝙛𝙞𝙣𝙞𝙨𝙝)**</span>
-1. Provision infrastructure:
-```bash
-make provision
-```
-
-2. Run the pipeline up to Silver:
+1. Run the pipeline up to Silver:
 ```bash
 make full
 ```
 
-3. Validate Silver:
+`make full` already includes `make provision`, so you do not need to run infrastructure provisioning separately in the normal end-to-end path.
+
+2. Validate Silver:
 ```bash
 make quality-checks
 ```
 
-4. Build Gold:
+3. Build Gold:
 ```bash
 make gold-full
 ```
@@ -101,35 +118,32 @@ This sequence removes:
 Warning: this is destructive for generated data and warehouse tables. Do not run it if you want to keep previous outputs.
 
 ```bash
+export CLOUDSDK_CONFIG="$(pwd)/.gcloud"
+if [ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
+  export GOOGLE_APPLICATION_CREDENTIALS="$(find "$(pwd)/.gcloud/credentials" -maxdepth 1 -name '*.json' | head -n 1)"
+fi
+
 rm -f data/raw/*/*.json data/raw/api_download_log.txt
 rm -rf data/parquet data/bronze data/silver data/gold
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-bronze/parquet/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-bronze/parquet/**"; fi'
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-silver/parquet/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-silver/parquet/**"; fi'
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 zsh -lc 'if gsutil -q ls "gs://ecodatacloud-ds-silver/exports/**" >/dev/null 2>&1; then gsutil -m rm -r "gs://ecodatacloud-ds-silver/exports/**"; fi'
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 bq rm -r -f -d ecodatacloud:ecodatacloud_bq_gold
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 TF_CLI_ARGS_apply=-auto-approve make full
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 make quality-checks
 
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 ECODATA_VARS='{"overwrite":true}' make gold-full
 ```
 
 At the end of the clean restart, you can validate the final table with:
 
 ```bash
-env -u GOOGLE_APPLICATION_CREDENTIALS -u CLOUDSDK_CONFIG \
 bq query --use_legacy_sql=false \
 'SELECT COUNT(*) AS row_count, COUNT(DISTINCT country_label) AS distinct_country_labels
 FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'

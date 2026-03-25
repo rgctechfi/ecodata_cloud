@@ -2,6 +2,7 @@
   𝙇𝙤𝙤𝙠𝙚𝙧 𝙎𝙩𝙪𝙙𝙞𝙤 𝘿𝙖𝙨𝙝𝙗𝙤𝙖𝙧𝙙
 </h1>
 
+
 ## <span style="color:#0B2D5C;">**𝙊𝙫𝙚𝙧𝙫𝙞𝙚𝙬**</span>
 This document presents the final visualization layer of the **Ecodata - Cloud** project. 
 The dashboard is built in Looker Studio and connects directly to our BigQuery data warehouse, specifically the `ecodatacloud_bq_gold.gold__obt` table.
@@ -11,7 +12,7 @@ Because the One Big Table (OBT) is pre-joined, partitioned by `year`, and cluste
 ---
 
 ## <span style="color:#0B2D5C;">**𝘿𝙖𝙨𝙝𝙗𝙤𝙖𝙧𝙙 𝙇𝙞𝙣𝙠**</span>
-> 🔗 **Click here to access the live Looker Studio Report** *(Replace this with your actual Looker Studio public/shared link)*
+> 🔗 **Click here to access the live Looker Studio Report** *https://lookerstudio.google.com/reporting/3541fe0f-2742-4d70-9067-e23942eae419*
 
 ---
 

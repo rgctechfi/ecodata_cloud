@@ -74,7 +74,7 @@ Gross debt includes liabilities that require future payment of interest and or p
 The IMF DataMapper provides a simple HTTP API to retrieve time series by indicator.
 
 #### Base endpoints
-- **Indicators API (example):** https://www.imf.org/external/datamapper/ap/v1/PPPPC
+- **Indicators API (example):** https://www.imf.org/external/datamapper/api/v1/PPPPC
 - **Countries list:** https://www.imf.org/external/datamapper/api/v1/countries
 
 #### Typical workflow
