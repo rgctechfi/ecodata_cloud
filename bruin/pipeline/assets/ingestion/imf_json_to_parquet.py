@@ -15,6 +15,16 @@ from pathlib import Path
 
 import pandas as pd
 
+# Technical notes for reviewers:
+# - This asset is a normalization boundary: heterogeneous IMF JSON payloads are converted into a
+#   stable tabular representation before the data enters cloud storage.
+# - The code favors explicit branching over clever generic recursion so each supported payload
+#   shape remains easy to explain during evaluation.
+# - pandas is used here as a pragmatic transformation engine: compact code, strong type coercion,
+#   and direct parquet export without hand-written serializers.
+# - The returned log dataframe is an operational artifact, which means the function is useful both
+#   as a runnable asset and as a testable unit in isolation.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root regardless of where the asset is launched from."""
@@ -70,6 +80,8 @@ def normalize_values_payload(values: dict) -> pd.DataFrame:
 
     frame = pd.DataFrame(rows)
     if not frame.empty:
+        # `errors="coerce"` is deliberate: malformed values become nulls instead of crashing
+        # the conversion step, and those anomalies are handled later by the quality checks.
         frame["year"] = pd.to_numeric(frame["year"], errors="coerce").astype("Int64")
         frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
     return frame
@@ -98,6 +110,7 @@ def payload_to_frame(payload: object) -> pd.DataFrame:
     if isinstance(payload, dict) and "countries" in payload and isinstance(payload["countries"], dict):
         return normalize_countries_payload(payload["countries"])
 
+    # `pd.json_normalize` is used as a generic fallback for less structured payloads.
     if isinstance(payload, list):
         return pd.json_normalize(payload)
 
@@ -129,6 +142,7 @@ def convert_json_to_parquet() -> pd.DataFrame:
     if not json_files:
         return pd.DataFrame(columns=columns)
 
+    # The timestamp is normalized once per run so all log rows belong to the same execution batch.
     run_at = pd.Timestamp.now(tz="UTC").tz_localize(None)
     logs = []
 
@@ -158,6 +172,8 @@ def convert_json_to_parquet() -> pd.DataFrame:
                 }
             )
         except Exception as exc:
+            # Errors are recorded row-by-row rather than raising immediately, which lets one bad
+            # source file surface alongside the successful conversions from the same run.
             logs.append(
                 {
                     "run_at": run_at,

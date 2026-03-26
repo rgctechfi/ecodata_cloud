@@ -1,5 +1,7 @@
 {
+  "_comment": "Declarative QA rules for Silver parquet datasets. The ingestion script merges the default block with the dataset-specific block matching the parquet stem.",
   "default": {
+    "_comment": "Baseline checks shared by all datasets: structural presence of the business grain and generic validation on year/key columns.",
     "required_columns": ["country", "country_label", "year", "id_countryear"],
     "not_null_columns": ["country", "year", "id_countryear"],
     "numeric_columns": ["year"],
@@ -8,33 +10,41 @@
     "max_year": 2035
   },
   "datasets": {
+    "_comment": "Each dataset can tighten the default checks, typically by requiring its metric column and validating that metric as numeric.",
     "countries": {
+      "_comment": "The reference scaffold must be complete because every downstream join depends on it.",
       "required_columns": ["country", "country_label", "year", "id_countryear"],
       "not_null_columns": ["country", "country_label", "year", "id_countryear"],
       "numeric_columns": ["year"],
       "unique_columns": ["id_countryear"]
     },
     "gdp_per_capita_usd": {
+      "_comment": "Adds the GDP-per-capita metric column to the expected schema and validates it as numeric.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_per_capita_usd_usd_per_capita"],
       "numeric_columns": ["year", "gdp_per_capita_usd_usd_per_capita"]
     },
     "gdp_per_capita_ppp": {
+      "_comment": "Ensures PPP GDP per capita is present and numeric after the Silver rename step.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_per_capita_ppp_international_dollars_per_capita"],
       "numeric_columns": ["year", "gdp_per_capita_ppp_international_dollars_per_capita"]
     },
     "gdp_ppp_world_share": {
+      "_comment": "Validates the world GDP share measure used later in the analytical OBT.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "gdp_ppp_world_share_percent_world"],
       "numeric_columns": ["year", "gdp_ppp_world_share_percent_world"]
     },
     "unemployment_rate": {
+      "_comment": "The unemployment series must preserve the shared business grain plus its renamed metric column.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "unemployment_rate_percent_labor_force"],
       "numeric_columns": ["year", "unemployment_rate_percent_labor_force"]
     },
     "public_debt_gdp": {
+      "_comment": "Debt-to-GDP is checked as a numeric measure before being loaded into Gold.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "public_debt_gdp_percent_gdp"],
       "numeric_columns": ["year", "public_debt_gdp_percent_gdp"]
     },
     "inflation_avg_consumer": {
+      "_comment": "Inflation keeps the standard grain and adds its dedicated metric column after rename.",
       "required_columns": ["country", "country_label", "year", "id_countryear", "inflation_avg_consumer_percent_change"],
       "numeric_columns": ["year", "inflation_avg_consumer_percent_change"]
     }

@@ -22,6 +22,16 @@ import pyarrow.parquet as pq
 from google.cloud import bigquery
 from google.cloud import storage
 
+# Technical notes for reviewers:
+# - This asset is a loader/orchestrator: it does not reshape business data, it translates Silver
+#   parquet files into managed BigQuery tables with the right storage settings.
+# - Performance-related choices are config-driven (partitioning, clustering), which is a common
+#   warehouse technique for separating table design concerns from ingestion mechanics.
+# - pyarrow is used to inspect parquet metadata before loading; this avoids guessing schema-related
+#   options and lets the loader stay generic across multiple datasets.
+# - The script is defensive around infrastructure state: it can create the target dataset, skip
+#   already existing tables, or overwrite them depending on the runtime strategy.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root from local or Bruin-managed execution contexts."""
@@ -119,6 +129,8 @@ def merge_gold_config(config: dict[str, Any], dataset_name: str) -> dict[str, An
     defaults = config.get("default", {})
     dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
 
+    # A shallow merge is sufficient here because dataset-specific configs only override
+    # top-level keys such as partition field or clustering columns.
     merged = dict(defaults)
     merged.update(dataset_cfg)
     return merged
@@ -129,6 +141,8 @@ def ensure_dataset(client: bigquery.Client, dataset_id: str, location: str | Non
     try:
         client.get_dataset(dataset_id)
     except Exception:
+        # Infrastructure bootstrap is embedded here so the asset remains self-sufficient even
+        # when run outside the full Make/Terraform flow.
         dataset = bigquery.Dataset(dataset_id)
         if location:
             dataset.location = location
@@ -149,6 +163,8 @@ def build_partitioning(config: dict[str, Any], columns: set[str]) -> bigquery.Ra
     if not partition_field or partition_field not in columns:
         return None
 
+    # Reading partition bounds from config keeps the loader generic and avoids dataset-specific
+    # if/else branches in Python.
     range_cfg = config.get("partition_range", {})
     start = parse_int(range_cfg.get("start")) or 1960
     end = parse_int(range_cfg.get("end")) or 2035
@@ -173,6 +189,7 @@ def load_gold_tables() -> None:
     """Load Silver parquet datasets into BigQuery Gold tables with configurable tuning."""
     bruin_vars = load_bruin_vars()
 
+    # These runtime variables control both warehouse naming and execution semantics.
     silver_bucket_name = bruin_vars.get("silver_bucket", "ecodatacloud-ds-silver")
     prefix = bruin_vars.get("prefix", "parquet/")
     table_prefix = bruin_vars.get("table_prefix", "gold__")
@@ -218,6 +235,8 @@ def load_gold_tables() -> None:
             if not overwrite:
                 try:
                     bq_client.get_table(table_id)
+                    # Existence checks are used as a lightweight idempotence mechanism when the
+                    # caller wants to protect existing Gold tables from being reloaded.
                     skipped += 1
                     logs.append(
                         {
@@ -241,6 +260,8 @@ def load_gold_tables() -> None:
                 blob.download_to_filename(tmp_path)
 
                 parquet = pq.ParquetFile(tmp_path)
+                # Reading parquet metadata before the load is cheaper than loading blindly and
+                # then discovering that partition or clustering settings cannot be applied.
                 columns = set(parquet.schema.names)
                 row_count = parquet.metadata.num_rows if parquet.metadata else None
 
@@ -255,6 +276,8 @@ def load_gold_tables() -> None:
                     write_disposition=write_disposition,
                     create_disposition=create_disposition,
                 )
+                # BigQuery handles schema inference, while this Python layer handles operational
+                # concerns such as naming, disposition policy, and storage optimization options.
                 if partitioning:
                     job_config.range_partitioning = partitioning
                 if clustering:

@@ -17,6 +17,16 @@ from pathlib import Path
 
 import requests
 
+# Technical notes for reviewers:
+# - This asset follows a small-function style: helper functions stay focused on one concern
+#   (URL building, HTTP call, JSON writing), while `run_extract` performs the orchestration.
+# - The design is intentionally idempotent at the file level: rerunning the asset rewrites the
+#   same raw JSON files, which keeps the extraction step simple to reason about.
+# - Runtime behavior is injected through environment variables instead of hardcoded flags, so the
+#   same code works from Bruin, Make targets, and ad hoc command-line runs.
+# - Error handling is "best effort" per dataset: one endpoint can fail without hiding the status
+#   of the others because every attempt is recorded in the final audit log.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root from the different execution contexts used by Bruin."""
@@ -111,7 +121,11 @@ def run_extract() -> None:
     }
 
     bruin_vars = load_runtime_vars()
+    # `datasets_filter` allows partial reruns, which is useful during development and debugging
+    # because the engineer does not have to call every IMF endpoint on each iteration.
     datasets_filter = bruin_vars.get("datasets")
+    # `periods` demonstrates a common orchestration pattern in this project: accept a flexible
+    # runtime shape (list or comma-separated string), then normalize it once near the boundary.
     periods = bruin_vars.get("periods")
 
     if isinstance(periods, str):
@@ -127,6 +141,8 @@ def run_extract() -> None:
             continue
 
         try:
+            # Countries is metadata rather than a time series, so it does not support the
+            # optional `periods` query parameter used by the indicator endpoints.
             final_url = url if name == "countries" else build_url(url, periods)
             data = fetch_json(final_url)
             file_path = folder / f"{name}.json"

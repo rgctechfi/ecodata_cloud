@@ -1,44 +1,54 @@
 {
+  "_comment": "Declarative transformation rules for the Silver layer. The Python asset reads these rules to stay generic: column renames, country/year scaffold expansion, and enrichment key definitions all live here.",
   "default": {
+    "_comment": "Base transformation contract applied to every dataset before dataset-specific overrides.",
     "drop_columns": [],
     "rename_columns": {}
   },
   "datasets": {
     "countries": {
+      "_comment": "The countries dataset is special: it becomes the reference scaffold for the warehouse grain and therefore expands to one row per country/year.",
       "rename_columns": {
         "label": "country_label"
       },
       "expand_year_range": {
+        "_comment": "This range drives the country/year scaffold used later by Gold joins and by the final OBT.",
         "start": 1980,
         "end": 2030
       }
     },
     "gdp_per_capita_usd": {
+      "_comment": "Rename the generic IMF `value` column into a semantic warehouse column name.",
       "rename_columns": {
         "value": "gdp_per_capita_usd_usd_per_capita"
       }
     },
     "gdp_per_capita_ppp": {
+      "_comment": "Same pattern as above: convert a generic input schema into an explicit analytical schema.",
       "rename_columns": {
         "value": "gdp_per_capita_ppp_international_dollars_per_capita"
       }
     },
     "gdp_ppp_world_share": {
+      "_comment": "The renamed field makes the metric self-descriptive once loaded into BigQuery and consumed by BI tools.",
       "rename_columns": {
         "value": "gdp_ppp_world_share_percent_world"
       }
     },
     "unemployment_rate": {
+      "_comment": "Dataset-specific naming keeps downstream SQL readable and avoids ambiguous `value` columns.",
       "rename_columns": {
         "value": "unemployment_rate_percent_labor_force"
       }
     },
     "public_debt_gdp": {
+      "_comment": "The metric name embeds both its meaning and unit so the schema stays self-documenting.",
       "rename_columns": {
         "value": "public_debt_gdp_percent_gdp"
       }
     },
     "inflation_avg_consumer": {
+      "_comment": "Renaming happens in Silver so Gold and Looker consume explicit business column names only.",
       "rename_columns": {
         "value": "inflation_avg_consumer_percent_change"
       }
@@ -46,6 +56,7 @@
   },
   "enrichments": {
     "country_labels": {
+      "_comment": "Lookup-driven enrichment that maps country codes to readable labels using the countries dataset as the authoritative source.",
       "enabled": true,
       "source_dataset": "countries",
       "country_column": "country",
@@ -53,6 +64,7 @@
       "target_column": "country_label"
     },
     "id_countryear": {
+      "_comment": "Shared business key configuration. The Silver asset builds this key to guarantee a consistent join grain across all datasets.",
       "enabled": true,
       "country_column": "country",
       "year_column": "year",

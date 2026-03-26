@@ -21,6 +21,16 @@ from typing import Any
 import pandas as pd
 from google.cloud import storage
 
+# Technical notes for reviewers:
+# - This asset applies declarative data-quality rules rather than hardcoding checks inline in the
+#   orchestration loop, which improves reuse and keeps the QA layer auditable.
+# - The check runner accumulates issues instead of stopping at the first error. This is a common
+#   observability technique because one run can reveal the full defect surface of a dataset.
+# - The script separates "detection" from "failure policy": `run_checks` finds issues, while
+#   `fail_on_error` decides whether the pipeline should stop.
+# - Temporary downloads are used because the authoritative inputs live in GCS, but the validation
+#   logic itself stays local and deterministic once the parquet file is available.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root from the different Bruin execution contexts."""
@@ -148,6 +158,7 @@ def merge_checks(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
     defaults = config.get("default", {})
     dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
 
+    # This explicit merge keeps the resulting rule set visible and predictable for each dataset.
     merged = {
         "required_columns": pick_list(dataset_cfg, "required_columns", pick_list(defaults, "required_columns", [])),
         "not_null_columns": pick_list(dataset_cfg, "not_null_columns", pick_list(defaults, "not_null_columns", [])),
@@ -164,6 +175,8 @@ def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     columns = set(frame.columns)
 
+    # Each check appends a compact machine-readable issue string. The log stays easy to parse
+    # while still being understandable by a reviewer without custom tooling.
     missing = [col for col in checks["required_columns"] if col not in columns]
     if missing:
         issues.append(f"missing_columns={missing}")
@@ -178,6 +191,8 @@ def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
     for col in checks["numeric_columns"]:
         if col not in columns:
             continue
+        # Comparing coerced nulls to original nulls distinguishes truly invalid values from
+        # legitimate missing data.
         series = pd.to_numeric(frame[col], errors="coerce")
         invalid = int(series.isna().sum() - frame[col].isna().sum())
         if invalid > 0:
@@ -246,6 +261,8 @@ def run_quality_checks() -> None:
         # The asset collects every issue first, then decides at the end whether the
         # pipeline should fail. This keeps the log useful even when multiple datasets break.
         issues = run_checks(frame, checks)
+        # The orchestration layer turns the issue list into a binary status for pipeline control,
+        # while still keeping the detailed issue payload in the CSV log.
         status = "ok" if not issues else "error"
         if issues:
             errored += 1

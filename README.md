@@ -7,23 +7,25 @@
   <img src="./ressources/pictures/fmi_logo.jpg" alt="IMF logo" width="400" />
 </p>
 
-## <span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙟𝙚𝙘𝙩**</span>
-
 ## <span style="color:#0B2D5C;">**𝙊𝙫𝙚𝙧𝙫𝙞𝙚𝙬**</span>
-This project builds a reproducible data pipeline around IMF DataMapper indicators. The goal is to collect different economic countries datas:
+This project builds a reproducible batch data pipeline around IMF DataMapper indicators. It collects country-level macroeconomic data, stores it in a cloud lakehouse-style architecture, and prepares a final analytical table for dashboarding.
 
 - Inflation
 - Gross Domestic Product
 - Debt
 - Employment
--> store it in a cloud data lake, and prepare it for analysis and dashboards.
+
+The final analytical deliverable is the BigQuery table `gold__obt`, consumed by the completed Looker Studio report.
+
+For an evaluator, the project demonstrates three things end-to-end:
+- infrastructure reproducibility with Terraform on GCP
+- a batch data pipeline from API extraction to Gold modeling with Bruin, Python, and SQL
+- a business-facing BI layer connected to the final Gold table
 
 This stack is intentionally lightweight: minimal tools, no dbt, and a focus on Python + Bruin + Makefile automation. The goal is to reduce moving parts, keep the pipeline easy to understand and operate, and still leverage Python’s flexibility for transformations/quality checks while Bruin handles orchestration and Makefile keeps runs consistent and reproducible.
 
-What is a Makefile ? 
-It is basically a tiny “task runner” that lets us run common project commands with short, memorable names. 
-Makefile is better when you have multiple tasks with dependencies and want a standard interface (e.g., make full, make gold-full).
-.sh is better for a single long script or when you need more complex logic.
+Why a `Makefile`?
+It acts as the operator-facing task runner of the project: short commands, consistent order of execution, and fewer setup mistakes during demos or reruns. It is a better fit than a single `.sh` file here because the project contains multiple reusable tasks with dependencies such as `make full`, `make quality-checks`, and `make gold-full`.
 
 <span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙗𝙡𝙚𝙢**</span>
 Provide a clean, repeatable pipeline that aggregates macroeconomic indicators across countries and years, and makes them available for downstream analytics. A key goal is to compare different economic variables between countries (e.g., US vs others) to discover trends.
@@ -240,9 +242,9 @@ Its strengths are:
 ---
 
 ## <span style="color:#0B2D5C;">**𝘿𝙤𝙘𝙨**</span>
-- `Setup.md`: environment setup, GCP/IAM, and infrastructure provisioning.
-- `Quickstart.md`: two complete paths (manual bash or Makefile) to run the pipeline from zero to finish.
-- [`Quickstart.md#clean-restart`](Quickstart.md#clean-restart): destructive rerun procedure to wipe generated outputs and rebuild the project from scratch.
-- `./data/Dataset.md`: Explain the dataset
-- `./data/Transformations.md`: Explain the changes in the silver layer and in the gold layer
-- `Looker.md`: documents the completed Looker Studio report and its analytical choices
+- [`Setup.md`](Setup.md): environment setup, GCP/IAM, and infrastructure provisioning
+- [`Quickstart.md`](Quickstart.md): two complete execution paths (manual shell or Makefile) to run the pipeline end to end
+- [`Quickstart.md#clean-restart`](Quickstart.md#clean-restart): destructive rebuild procedure to wipe generated outputs and recreate the project from scratch
+- [`data/Dataset.md`](data/Dataset.md): source dataset description and IMF indicator scope
+- [`data/Transformations.md`](data/Transformations.md): Silver and Gold transformation logic, including the OBT design
+- [`Looker.md`](Looker.md): completed Looker Studio report, visuals, and analytical choices

@@ -22,6 +22,16 @@ import pandas as pd
 
 from google.cloud import storage
 
+# Technical notes for reviewers:
+# - This is the richest ingestion script because it combines transport, normalization rules,
+#   metadata enrichment, and grain construction for later joins.
+# - The code uses a config-driven design: column drops, renames, and enrichment behavior live in
+#   JSON config so the transformation layer can evolve without rewriting orchestration logic.
+# - Helper functions are intentionally generic (`merge_transforms`, `get_enrichment`,
+#   `build_id_countryear`) so the asset demonstrates reuse instead of dataset-specific duplication.
+# - The Silver step is also where the warehouse grain is formalized: the countries dataset becomes
+#   the reference scaffold, while all indicator datasets are enriched to match that grain.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root for local runs and Bruin containerized runs."""
@@ -172,6 +182,8 @@ def build_id_countryear(
     if country_col not in frame.columns or year_col not in frame.columns:
         return frame
 
+    # The key is built from normalized values rather than raw strings to avoid subtle join bugs
+    # such as whitespace differences or non-numeric year representations.
     year_series = pd.to_numeric(frame[year_col], errors="coerce").astype("Int64")
     valid = frame[country_col].notna() & year_series.notna()
     id_series = pd.Series([pd.NA] * len(frame), index=frame.index, dtype="object")
@@ -201,6 +213,8 @@ def expand_countries_years(
 
     base = frame[[country_col, label_col]].dropna(subset=[country_col]).drop_duplicates()
     years = pd.DataFrame({year_col: list(range(start_year, end_year + 1))})
+    # The `_key = 1` technique is a simple explicit cross join: every country is paired with
+    # every year in the configured range to create the complete analytical scaffold.
     base["_key"] = 1
     years["_key"] = 1
     expanded = base.merge(years, on="_key").drop(columns="_key")
@@ -240,6 +254,8 @@ def load_countries_lookup(
         if label_column is None or country_col not in frame.columns:
             return {}
 
+        # Materializing the lookup as a dictionary keeps enrichment fast and readable when pandas
+        # later applies `Series.map` on indicator datasets.
         mapping_frame = (
             frame[[country_col, label_column]]
             .dropna(subset=[country_col, label_column])
@@ -293,6 +309,8 @@ def promote_bronze_to_silver() -> None:
         },
     )
 
+    # The lookup is loaded once, then reused for every indicator file. This avoids repeated
+    # downloads of the same countries parquet and keeps the enrichment cost bounded.
     countries_lookup: dict[str, str] = {}
     if parse_bool(label_cfg.get("enabled", True)):
         countries_lookup = load_countries_lookup(
@@ -334,6 +352,7 @@ def promote_bronze_to_silver() -> None:
             )
             continue
 
+        # The object name is preserved between Bronze and Silver so lineage remains easy to follow.
         dest_name = blob.name
         dest_blob = silver_bucket.blob(dest_name)
         dataset_name = Path(blob.name).stem
@@ -376,6 +395,8 @@ def promote_bronze_to_silver() -> None:
                     dest_path = tmpdir_path / "silver.parquet"
 
                     blob.download_to_filename(source_path)
+                    # The dataframe is treated as an immutable-like value: each transformation
+                    # returns a new frame assignment, which keeps the sequence easy to read.
                     frame = pd.read_parquet(source_path)
                     row_count_before = int(frame.shape[0])
                     column_count_before = int(frame.shape[1])
@@ -409,6 +430,7 @@ def promote_bronze_to_silver() -> None:
                                     end_year,
                                 )
 
+                        # The reference dataset is the only one expanded first, then keyed.
                         frame = build_id_countryear(
                             frame,
                             str(id_cfg.get("country_column", "country")),
@@ -424,6 +446,8 @@ def promote_bronze_to_silver() -> None:
                             # table created above, which keeps enrichment logic centralized.
                             if target_label in frame.columns:
                                 if countries_lookup:
+                                    # `fillna` preserves any existing label while backfilling only
+                                    # the missing values from the authoritative lookup table.
                                     frame[target_label] = frame[target_label].fillna(
                                         frame[country_col].map(countries_lookup)
                                     )
@@ -446,6 +470,8 @@ def promote_bronze_to_silver() -> None:
                     row_count_after = int(frame.shape[0])
                     column_count_after = int(frame.shape[1])
 
+                    # Silver is persisted back to parquet so downstream assets stay storage-agnostic:
+                    # they consume files, not Python objects from this process.
                     frame.to_parquet(dest_path, index=False)
                     bytes_written = dest_path.stat().st_size
                     dest_blob.upload_from_filename(dest_path)

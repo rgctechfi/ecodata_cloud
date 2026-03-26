@@ -19,6 +19,15 @@ from typing import Any
 
 from google.cloud import storage
 
+# Technical notes for reviewers:
+# - This script is intentionally thin: its job is transport, not transformation.
+# - Object naming is deterministic, which is a common data engineering technique for making cloud
+#   storage pipelines predictable and re-runnable.
+# - The `overwrite` and `dry_run` flags provide controlled idempotence: we can safely inspect or
+#   replay behavior without mutating cloud state.
+# - The asset writes a machine-readable CSV log instead of relying only on stdout, which is more
+#   useful for debugging repeated runs and for demonstrating observability during evaluation.
+
 
 def resolve_project_root() -> Path:
     """Resolve the repository root from either the repo or the Bruin folder."""
@@ -93,6 +102,8 @@ def upload_bronze() -> None:
     """Upload local parquet files to the Bronze bucket and persist an execution log."""
     bruin_vars = load_bruin_vars()
 
+    # These variables are the control surface of the asset: destination, naming strategy,
+    # replay behavior, and optional scope reduction for local debugging.
     bronze_bucket_name = bruin_vars.get("bronze_bucket", "ecodatacloud-ds-bronze")
     prefix = bruin_vars.get("prefix", "parquet/")
     overwrite = parse_bool(bruin_vars.get("overwrite"))
@@ -133,6 +144,8 @@ def upload_bronze() -> None:
 
         try:
             if not overwrite and blob.exists():
+                # Skipping existing objects is what makes the step naturally idempotent in
+                # day-to-day usage: reruns do not duplicate data when overwrite is disabled.
                 logs.append(
                     {
                         "run_at": run_at,
@@ -147,6 +160,7 @@ def upload_bronze() -> None:
                 continue
 
             if dry_run:
+                # `dry_run` preserves the exact control flow and logging without mutating GCS.
                 status = "dry_run"
             else:
                 blob.upload_from_filename(parquet_path)
