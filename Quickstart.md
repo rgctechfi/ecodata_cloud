@@ -7,6 +7,14 @@ This guide shows two complete paths (manual bash or Makefile) to run the pipelin
 ## <span style="color:#0B2D5C;">**𝘽𝙚𝙛𝙤𝙧𝙚 𝙔𝙤𝙪 𝙎𝙩𝙖𝙧𝙩**</span>
 Make sure the environment and infrastructure are ready by following `Setup.md` (GCP/IAM + Terraform + auth).
 
+Essential prerequisites to avoid getting blocked after a fresh clone:
+- Install `gcloud`, `terraform`, and the `Bruin CLI`.
+- Make sure `.bruin.yml` is present in the repo root.
+- Have access to a GCP project with billing enabled.
+- If you run Terraform, use an account with enough permissions to create buckets, dataset, service account, and IAM bindings.
+- If you are not using the default `ecodatacloud` project, update [`.bruin.yml`](/Users/rgctechfi/Projects/ecodata_cloud/.bruin.yml), [terraform/variables.tf](/Users/rgctechfi/Projects/ecodata_cloud/terraform/variables.tf), and your active `gcloud` project before running the pipeline.
+- Run `make auth-check` before the first full run to confirm your access works.
+
 ## <span style="color:#0B2D5C;">**𝘼𝙘𝙘𝙚𝙨𝙨 𝙎𝙚𝙩𝙪𝙥**</span>
 Two auth modes are supported in this project:
 
@@ -150,7 +158,7 @@ FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
 ```
 
 ## <span style="color:#0B2D5C;">**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**</span>
-- `make auth-check`: verify gcloud and ADC authentication
+- `make auth-check`: verify gcloud auth using ADC or a repo-local service account key
 - `make provision`: Terraform init + plan + apply
 - `make bruin-extract`: IMF API extraction to JSON
 - `make bruin-convert`: JSON to Parquet conversion
@@ -164,7 +172,7 @@ FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
 - `make init-to-bronze`: provision + extract + convert + upload (no silver promotion)
 
 ## <span style="color:#0B2D5C;">**𝙏𝙤𝙤𝙡 𝙀𝙦𝙪𝙞𝙫𝙖𝙡𝙚𝙣𝙩𝙨**</span>
-- `make auth-check` → `gcloud auth application-default print-access-token` + `gcloud config get-value project`
+- `make auth-check` → validates either `GOOGLE_APPLICATION_CREDENTIALS` or user ADC, then checks the active GCP project
 - `make provision` → `terraform -chdir=terraform init` + `terraform -chdir=terraform plan` + `terraform -chdir=terraform apply`
 - `make bruin-extract` → `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
 - `make bruin-convert` → `bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`

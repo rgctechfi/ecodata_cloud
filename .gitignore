@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -18,10 +21,11 @@ wheels/
 # Files
 *.parquet
 *.csv
-.bruin.yml
 logs/runs
 logs/*.log
 *.py[cod]
+terraform.tfstate*
+terraform/*.tfstate*
 
 # Project data (keep docs only)
 data/raw/**

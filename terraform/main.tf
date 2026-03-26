@@ -16,6 +16,7 @@ provider "google" {
 # Enable required APIs
 resource "google_project_service" "services" {
   for_each = toset([
+    "serviceusage.googleapis.com",
     "iam.googleapis.com",
     "storage.googleapis.com",
     "bigquery.googleapis.com",
@@ -34,15 +35,39 @@ resource "google_service_account" "sa_ecodata" {
 }
 
 # IAM roles for the service account
+resource "google_project_iam_member" "sa_storage_admin" {
+  project = var.project
+  role    = "roles/storage.admin"
+  member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
+}
+
 resource "google_project_iam_member" "sa_storage_object_admin" {
   project = var.project
   role    = "roles/storage.objectAdmin"
   member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
 }
 
+resource "google_project_iam_member" "sa_bigquery_admin" {
+  project = var.project
+  role    = "roles/bigquery.admin"
+  member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
+}
+
 resource "google_project_iam_member" "sa_bigquery_data_editor" {
   project = var.project
   role    = "roles/bigquery.dataEditor"
+  member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
+}
+
+resource "google_project_iam_member" "sa_iam_service_account_admin" {
+  project = var.project
+  role    = "roles/iam.serviceAccountAdmin"
+  member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
+}
+
+resource "google_project_iam_member" "sa_serviceusage_admin" {
+  project = var.project
+  role    = "roles/serviceusage.serviceUsageAdmin"
   member  = "serviceAccount:${google_service_account.sa_ecodata.email}"
 }
 
@@ -108,6 +133,7 @@ resource "google_bigquery_dataset" "dataset" {
   dataset_id = var.bq_dataset_name
   project    = var.project
   location   = var.location
+  max_time_travel_hours = 168
 
   depends_on = [google_project_service.services]
 }

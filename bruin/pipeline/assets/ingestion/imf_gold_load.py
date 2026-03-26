@@ -24,6 +24,7 @@ from google.cloud import storage
 
 
 def resolve_project_root() -> Path:
+    """Resolve the repository root from local or Bruin-managed execution contexts."""
     # Support running the asset from the repo root or from the bruin pipeline folder.
     candidates = [
         Path.cwd(),
@@ -37,6 +38,7 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime parameters controlling the BigQuery Gold load."""
     raw = os.environ.get("ECODATA_VARS") or os.environ.get("BRUIN_VARS", "")
     if not raw:
         return {}
@@ -47,6 +49,7 @@ def load_bruin_vars() -> dict[str, Any]:
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:
+    """Convert runtime flags into booleans with a configurable default."""
     if value is None:
         return default
     if isinstance(value, bool):
@@ -57,6 +60,7 @@ def parse_bool(value: Any, default: bool = False) -> bool:
 
 
 def parse_int(value: Any) -> int | None:
+    """Parse optional numeric settings such as partition bounds."""
     if value is None:
         return None
     if isinstance(value, int):
@@ -70,6 +74,9 @@ def parse_int(value: Any) -> int | None:
 
 
 def default_gold_config() -> dict[str, Any]:
+    """Return default BigQuery tuning settings for Gold tables."""
+    # Partitioning and clustering are kept declarative so table tuning can evolve
+    # without rewriting the loading logic for every dataset.
     return {
         "default": {
             "partition_field": "year",
@@ -86,6 +93,7 @@ def default_gold_config() -> dict[str, Any]:
 
 
 def load_gold_config(project_root: Path, override_path: str | None) -> dict[str, Any]:
+    """Load the Gold table config and validate its top-level JSON structure."""
     if override_path:
         config_path = Path(override_path).expanduser()
     else:
@@ -107,6 +115,7 @@ def load_gold_config(project_root: Path, override_path: str | None) -> dict[str,
 
 
 def merge_gold_config(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
+    """Combine the default Gold settings with one dataset-specific override block."""
     defaults = config.get("default", {})
     dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
 
@@ -116,6 +125,7 @@ def merge_gold_config(config: dict[str, Any], dataset_name: str) -> dict[str, An
 
 
 def ensure_dataset(client: bigquery.Client, dataset_id: str, location: str | None) -> None:
+    """Create the target BigQuery dataset on demand if it does not exist yet."""
     try:
         client.get_dataset(dataset_id)
     except Exception:
@@ -126,12 +136,15 @@ def ensure_dataset(client: bigquery.Client, dataset_id: str, location: str | Non
 
 
 def table_name_from_blob(blob_name: str, prefix: str, table_prefix: str) -> str:
-    # Ne conserve que le nom du fichier (sans les dossiers)
+    """Derive a deterministic Gold table name from the parquet object name."""
+    # Only the parquet filename matters: folders are used for storage organization,
+    # while the table name stays stable and predictable in BigQuery.
     stem = Path(blob_name).stem
     return f"{table_prefix}{stem}"
 
 
 def build_partitioning(config: dict[str, Any], columns: set[str]) -> bigquery.RangePartitioning | None:
+    """Build range partitioning only when the configured field exists in the parquet schema."""
     partition_field = config.get("partition_field")
     if not partition_field or partition_field not in columns:
         return None
@@ -148,6 +161,7 @@ def build_partitioning(config: dict[str, Any], columns: set[str]) -> bigquery.Ra
 
 
 def build_cluster_fields(config: dict[str, Any], columns: set[str]) -> list[str] | None:
+    """Keep only valid clustering fields so the loader stays generic across datasets."""
     cluster_fields = config.get("cluster_fields", [])
     if not isinstance(cluster_fields, list):
         return None
@@ -156,6 +170,7 @@ def build_cluster_fields(config: dict[str, Any], columns: set[str]) -> list[str]
 
 
 def load_gold_tables() -> None:
+    """Load Silver parquet datasets into BigQuery Gold tables with configurable tuning."""
     bruin_vars = load_bruin_vars()
 
     silver_bucket_name = bruin_vars.get("silver_bucket", "ecodatacloud-ds-silver")
@@ -220,6 +235,7 @@ def load_gold_tables() -> None:
                 except Exception:
                     pass
 
+            # Downloading to a temporary file lets us inspect parquet metadata before loading.
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmp_path = Path(tmpdir) / "silver.parquet"
                 blob.download_to_filename(tmp_path)
@@ -228,6 +244,8 @@ def load_gold_tables() -> None:
                 columns = set(parquet.schema.names)
                 row_count = parquet.metadata.num_rows if parquet.metadata else None
 
+                # Partitioning/clustering is applied only when the expected columns exist,
+                # which keeps the loader generic across heterogeneous datasets.
                 partitioning = build_partitioning(config, columns)
                 clustering = build_cluster_fields(config, columns)
 
@@ -245,6 +263,8 @@ def load_gold_tables() -> None:
                 if dry_run:
                     status = "dry_run"
                 else:
+                    # BigQuery infers the schema from parquet while this asset controls
+                    # the warehouse-side table behavior (naming, partitioning, clustering).
                     with tmp_path.open("rb") as handle:
                         load_job = bq_client.load_table_from_file(
                             handle, table_id, job_config=job_config

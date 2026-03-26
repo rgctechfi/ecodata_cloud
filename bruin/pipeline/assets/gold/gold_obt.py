@@ -19,6 +19,7 @@ from google.cloud import bigquery
 
 
 def resolve_project_root() -> Path:
+    """Resolve the repository root from the different locations Bruin may use."""
     candidates = [
         Path.cwd(),
         Path.cwd().parent,
@@ -31,6 +32,9 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize JSON runtime overrides passed by Bruin or Make."""
+    # Bruin passes runtime overrides through environment variables, which keeps
+    # the asset reusable across local runs, Make targets, and CI-like executions.
     raw = os.environ.get("ECODATA_VARS") or os.environ.get("BRUIN_VARS", "")
     if not raw:
         return {}
@@ -41,6 +45,7 @@ def load_bruin_vars() -> dict[str, Any]:
 
 
 def load_query(project_root: Path) -> str:
+    """Load the SQL query that defines the One Big Table business logic."""
     query_path = project_root / "bruin" / "pipeline" / "assets" / "gold" / "gold_obt.sql"
     return query_path.read_text()
 
@@ -51,7 +56,10 @@ def ensure_obt_table(
     dataset_id: str,
     table_name: str,
 ) -> str:
+    """Recreate the destination OBT table with the expected schema and storage settings."""
     table_id = f"{project_id}.{dataset_id}.{table_name}"
+    # The OBT schema is declared explicitly because it is the business-facing table
+    # consumed by analysis and reporting tools.
     schema = [
         bigquery.SchemaField("country_label", "STRING"),
         bigquery.SchemaField("year", "INTEGER"),
@@ -63,9 +71,11 @@ def ensure_obt_table(
         bigquery.SchemaField("inflation_avg_consumer_percent_change", "FLOAT"),
     ]
 
+    # Recreate the table on each run so the SQL definition remains the single source of truth.
     client.delete_table(table_id, not_found_ok=True)
 
     table = bigquery.Table(table_id, schema=schema)
+    # Range partitioning on year matches the analytical grain and keeps scans cheaper.
     table.range_partitioning = bigquery.RangePartitioning(
         field="year",
         range_=bigquery.PartitionRange(start=1980, end=2030, interval=1),
@@ -76,6 +86,7 @@ def ensure_obt_table(
 
 
 def run_gold_obt() -> None:
+    """Execute the SQL OBT query and materialize its result into the final Gold table."""
     bruin_vars = load_bruin_vars()
     project_root = resolve_project_root()
 
@@ -87,6 +98,8 @@ def run_gold_obt() -> None:
 
     client = bigquery.Client(project=bq_project)
     destination_table = ensure_obt_table(client, bq_project, bq_dataset, obt_table_name)
+    # The SQL file contains the business logic; the Python wrapper only manages
+    # table lifecycle and execution settings.
     select_query = load_query(project_root).strip().rstrip(";")
 
     job_config = bigquery.QueryJobConfig(

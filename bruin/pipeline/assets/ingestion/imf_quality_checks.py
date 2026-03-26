@@ -23,6 +23,7 @@ from google.cloud import storage
 
 
 def resolve_project_root() -> Path:
+    """Resolve the repository root from the different Bruin execution contexts."""
     # Support running the asset from the repo root or from the bruin pipeline folder.
     candidates = [
         Path.cwd(),
@@ -36,6 +37,7 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime variables that configure the QA step."""
     raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
@@ -46,6 +48,7 @@ def load_bruin_vars() -> dict[str, Any]:
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:
+    """Convert common string/JSON boolean representations into a Python bool."""
     if value is None:
         return default
     if isinstance(value, bool):
@@ -56,6 +59,7 @@ def parse_bool(value: Any, default: bool = False) -> bool:
 
 
 def parse_int(value: Any) -> int | None:
+    """Parse optional numeric thresholds or dataset limits from runtime variables."""
     if value is None:
         return None
     if isinstance(value, int):
@@ -69,6 +73,9 @@ def parse_int(value: Any) -> int | None:
 
 
 def default_quality_config() -> dict[str, Any]:
+    """Return the baseline QA rules used when no external config is provided."""
+    # Checks are intentionally simple and transparent: schema presence, nullability,
+    # numeric coercion, uniqueness, and year boundaries.
     return {
         "default": {
             "required_columns": ["country", "country_label", "year", "value", "id_countryear"],
@@ -90,6 +97,7 @@ def default_quality_config() -> dict[str, Any]:
 
 
 def load_quality_config(project_root: Path, override_path: str | None) -> dict[str, Any]:
+    """Load and validate the quality-check configuration file."""
     if override_path:
         config_path = Path(override_path).expanduser()
     else:
@@ -111,6 +119,7 @@ def load_quality_config(project_root: Path, override_path: str | None) -> dict[s
 
 
 def pick_list(config: dict[str, Any], key: str, fallback: list[str]) -> list[str]:
+    """Read a list setting defensively, falling back when the config is incomplete."""
     if key in config:
         value = config.get(key)
         if isinstance(value, list):
@@ -119,6 +128,7 @@ def pick_list(config: dict[str, Any], key: str, fallback: list[str]) -> list[str
 
 
 def pick_int(config: dict[str, Any], key: str, fallback: int | None) -> int | None:
+    """Read an integer setting defensively, falling back on invalid overrides."""
     if key in config:
         value = config.get(key)
         if value is None:
@@ -134,6 +144,7 @@ def pick_int(config: dict[str, Any], key: str, fallback: int | None) -> int | No
 
 
 def merge_checks(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
+    """Merge default QA rules with dataset-specific overrides."""
     defaults = config.get("default", {})
     dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
 
@@ -149,6 +160,7 @@ def merge_checks(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
 
 
 def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
+    """Evaluate a dataframe against the configured QA rules and return human-readable issues."""
     issues: list[str] = []
     columns = set(frame.columns)
 
@@ -198,6 +210,7 @@ def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
 
 
 def run_quality_checks() -> None:
+    """Validate each Silver parquet dataset before it is allowed into Gold."""
     bruin_vars = load_bruin_vars()
 
     silver_bucket_name = bruin_vars.get("silver_bucket", "ecodatacloud-ds-silver")
@@ -230,6 +243,8 @@ def run_quality_checks() -> None:
             blob.download_to_filename(tmp_path)
             frame = pd.read_parquet(tmp_path)
 
+        # The asset collects every issue first, then decides at the end whether the
+        # pipeline should fail. This keeps the log useful even when multiple datasets break.
         issues = run_checks(frame, checks)
         status = "ok" if not issues else "error"
         if issues:

@@ -24,6 +24,7 @@ from google.cloud import storage
 
 
 def resolve_project_root() -> Path:
+    """Resolve the repository root for local runs and Bruin containerized runs."""
     # Support running the asset from the repo root or from the bruin pipeline folder.
     candidates = [
         Path.cwd(),
@@ -37,6 +38,7 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime overrides used to pilot the Silver promotion step."""
     raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
@@ -47,6 +49,7 @@ def load_bruin_vars() -> dict[str, Any]:
 
 
 def parse_bool(value: Any) -> bool:
+    """Coerce string-like flags from runtime variables into booleans."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -55,6 +58,7 @@ def parse_bool(value: Any) -> bool:
 
 
 def parse_int(value: Any) -> int | None:
+    """Parse optional integer runtime settings such as max_objects."""
     if value is None:
         return None
     if isinstance(value, int):
@@ -68,6 +72,7 @@ def parse_int(value: Any) -> int | None:
 
 
 def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
+    """Return a GCS bucket handle with a clearer error if access fails."""
     try:
         return client.get_bucket(name)
     except Exception as exc:  # pragma: no cover - surface a clear message
@@ -75,6 +80,9 @@ def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
 
 
 def default_transform_config() -> dict[str, Any]:
+    """Return default Silver transformation rules when no JSON config is provided."""
+    # Silver rules stay config-driven on purpose: reviewers can see what is hardcoded
+    # in Python versus what is meant to vary by dataset in JSON config files.
     return {
         "default": {"drop_columns": [], "rename_columns": {}},
         "datasets": {},
@@ -83,6 +91,7 @@ def default_transform_config() -> dict[str, Any]:
 
 
 def load_transform_config(project_root: Path, override_path: str | None) -> dict[str, Any]:
+    """Load the Silver transformation config and validate its top-level structure."""
     if override_path:
         config_path = Path(override_path).expanduser()
     else:
@@ -111,6 +120,7 @@ def load_transform_config(project_root: Path, override_path: str | None) -> dict
 
 
 def merge_transforms(config: dict[str, Any], dataset_name: str) -> tuple[list[str], dict[str, str]]:
+    """Merge default and dataset-specific rename/drop rules."""
     defaults = config.get("default", {})
     dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
 
@@ -123,7 +133,7 @@ def merge_transforms(config: dict[str, Any], dataset_name: str) -> tuple[list[st
         if isinstance(candidate.get("rename_columns"), dict):
             rename_columns.update({str(k): str(v) for k, v in candidate["rename_columns"].items()})
 
-    # de-duplicate while keeping order
+    # De-duplicate while keeping order so config files stay predictable for reviewers.
     seen: set[str] = set()
     drop_columns = [col for col in drop_columns if not (col in seen or seen.add(col))]
     return drop_columns, rename_columns
@@ -132,6 +142,7 @@ def merge_transforms(config: dict[str, Any], dataset_name: str) -> tuple[list[st
 def apply_transforms(
     frame: pd.DataFrame, dataset_name: str, config: dict[str, Any]
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Apply config-driven structural changes and return a small audit summary."""
     drop_columns, rename_columns = merge_transforms(config, dataset_name)
     dropped = [col for col in drop_columns if col in frame.columns]
     rename_columns = {k: v for k, v in rename_columns.items() if k in frame.columns}
@@ -145,6 +156,7 @@ def apply_transforms(
 
 
 def get_enrichment(config: dict[str, Any], key: str, defaults: dict[str, Any]) -> dict[str, Any]:
+    """Merge one enrichment block with defaults while keeping the function generic."""
     enrichments = config.get("enrichments", {})
     if isinstance(enrichments.get(key), dict):
         merged = defaults.copy()
@@ -156,6 +168,7 @@ def get_enrichment(config: dict[str, Any], key: str, defaults: dict[str, Any]) -
 def build_id_countryear(
     frame: pd.DataFrame, country_col: str, year_col: str, target_col: str, separator: str
 ) -> pd.DataFrame:
+    """Create the shared business key used to join datasets at country/year grain."""
     if country_col not in frame.columns or year_col not in frame.columns:
         return frame
 
@@ -179,6 +192,7 @@ def expand_countries_years(
     start_year: int,
     end_year: int,
 ) -> pd.DataFrame:
+    """Generate the complete country/year scaffold used as the warehouse base grain."""
     if country_col not in frame.columns:
         return frame
 
@@ -200,6 +214,7 @@ def load_countries_lookup(
     transform_config: dict[str, Any],
     label_cfg: dict[str, Any],
 ) -> dict[str, str]:
+    """Build an in-memory country code -> label lookup from the Bronze countries dataset."""
     countries_dataset = str(label_cfg.get("source_dataset", "countries"))
     country_col = str(label_cfg.get("country_column", "country"))
     label_col = str(label_cfg.get("label_column", "label"))
@@ -218,6 +233,8 @@ def load_countries_lookup(
 
         frame, _ = apply_transforms(frame, countries_dataset, transform_config)
 
+        # The countries dataset is reused as a lookup table to enrich every indicator
+        # with a readable country label before loading Gold.
         label_candidates = [target_col, label_col, "country_label", "label"]
         label_column = next((col for col in label_candidates if col in frame.columns), None)
         if label_column is None or country_col not in frame.columns:
@@ -234,6 +251,7 @@ def load_countries_lookup(
 
 
 def promote_bronze_to_silver() -> None:
+    """Clean, enrich, and copy Bronze parquet files into the Silver bucket."""
     bruin_vars = load_bruin_vars()
 
     bronze_bucket_name = bruin_vars.get("bronze_bucket", "ecodatacloud-ds-bronze")
@@ -251,6 +269,7 @@ def promote_bronze_to_silver() -> None:
     bronze_bucket = ensure_bucket(client, bronze_bucket_name)
     silver_bucket = ensure_bucket(client, silver_bucket_name)
 
+    # The enrichment blocks keep business rules explicit and overridable via config.
     label_cfg = get_enrichment(
         transform_config,
         "country_labels",
@@ -349,6 +368,8 @@ def promote_bronze_to_silver() -> None:
                 column_count_after = None
                 bytes_written = blob.size
             else:
+                # Temporary local files keep cloud-to-cloud transformations simple while
+                # avoiding permanent intermediate files in the repository.
                 with tempfile.TemporaryDirectory() as tmpdir:
                     tmpdir_path = Path(tmpdir)
                     source_path = tmpdir_path / "bronze.parquet"
@@ -359,16 +380,20 @@ def promote_bronze_to_silver() -> None:
                     row_count_before = int(frame.shape[0])
                     column_count_before = int(frame.shape[1])
 
+                    # Dataset-specific clean-up is declared in silver_transforms.json.
                     frame, _ = apply_transforms(frame, dataset_name, transform_config)
 
-                    # Apply enrichment logic based on transform config.
+                    # The countries dataset is treated as the reference grid used to
+                    # generate one row per country/year before joining indicators later.
                     if dataset_name == str(label_cfg.get("source_dataset", "countries")):
-                        # Drop rows with missing country labels (e.g., ATI/ATL) before expansion.
+                        # Drop rows with missing country labels (e.g., aggregates that do not
+                        # need to appear in the analytical OBT) before expanding the year grid.
                         label_col = str(label_cfg.get("target_column", "country_label"))
                         if label_col in frame.columns:
                             frame = frame[frame[label_col].notna()].copy()
 
-                        # Expand countries across a fixed year range when configured.
+                        # Expand countries across a fixed year range so the base table can
+                        # later serve as the canonical country/year grain of the warehouse.
                         dataset_cfg = transform_config.get("datasets", {}).get(dataset_name, {})
                         year_range = dataset_cfg.get("expand_year_range")
                         if isinstance(year_range, dict):
@@ -395,6 +420,8 @@ def promote_bronze_to_silver() -> None:
                         if parse_bool(label_cfg.get("enabled", True)):
                             target_label = str(label_cfg.get("target_column", "country_label"))
                             country_col = str(label_cfg.get("country_column", "country"))
+                            # Indicator datasets inherit their country label from the lookup
+                            # table created above, which keeps enrichment logic centralized.
                             if target_label in frame.columns:
                                 if countries_lookup:
                                     frame[target_label] = frame[target_label].fillna(
@@ -408,6 +435,7 @@ def promote_bronze_to_silver() -> None:
                                 )
 
                         if parse_bool(id_cfg.get("enabled", True)):
+                            # id_countryear is the shared business key used all the way to Gold OBT.
                             frame = build_id_countryear(
                                 frame,
                                 str(id_cfg.get("country_column", "country")),

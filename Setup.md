@@ -41,10 +41,15 @@ User/Owner account (used to run Terraform and manage project resources): `roles/
 Service account `bruin-ingestor@ecodatacloud.iam.gserviceaccount.com` is provisioned by Terraform for the project, but it is **not** the credential used by local Bruin runs unless you explicitly wire it into the runtime yourself.
 
 Terraform currently grants this service account:
+- `roles/storage.admin`
 - `roles/storage.objectAdmin`
+- `roles/bigquery.admin`
 - `roles/bigquery.dataEditor`
+- `roles/iam.serviceAccountAdmin`
+- `roles/serviceusage.serviceUsageAdmin`
 
 Required APIs managed by Terraform in this project:
+- `serviceusage.googleapis.com`
 - `iam.googleapis.com`
 - `storage.googleapis.com`
 - `bigquery.googleapis.com`
@@ -72,6 +77,6 @@ Alternative: `make provision` runs `terraform init` + `terraform plan` + `terraf
 
 This creates:
 1. Service account `bruin-ingestor`
-2. IAM roles: Storage Object Admin + BigQuery Data Editor
+2. IAM roles: Storage Admin, Storage Object Admin, BigQuery Admin, BigQuery Data Editor, IAM Service Account Admin, and Service Usage Admin
 3. Buckets: bronze + silver
 4. BigQuery dataset

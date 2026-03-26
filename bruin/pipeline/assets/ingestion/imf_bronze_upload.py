@@ -21,6 +21,7 @@ from google.cloud import storage
 
 
 def resolve_project_root() -> Path:
+    """Resolve the repository root from either the repo or the Bruin folder."""
     # Support running the asset from the repo root or from the bruin pipeline folder.
     candidates = [
         Path.cwd(),
@@ -34,6 +35,9 @@ def resolve_project_root() -> Path:
 
 
 def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime parameters that control the Bronze upload behavior."""
+    # Optional runtime settings let us switch buckets, prefixes, or overwrite mode
+    # without editing the asset code.
     raw = os.environ.get("ECODATA_VARS", "")
     if not raw:
         return {}
@@ -44,6 +48,7 @@ def load_bruin_vars() -> dict[str, Any]:
 
 
 def parse_bool(value: Any, default: bool = False) -> bool:
+    """Coerce CLI/environment values such as 'true' or '1' into booleans."""
     if value is None:
         return default
     if isinstance(value, bool):
@@ -54,6 +59,7 @@ def parse_bool(value: Any, default: bool = False) -> bool:
 
 
 def parse_int(value: Any) -> int | None:
+    """Best-effort integer parsing for optional runtime limits such as max_files."""
     if value is None:
         return None
     if isinstance(value, int):
@@ -67,6 +73,7 @@ def parse_int(value: Any) -> int | None:
 
 
 def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
+    """Fetch a bucket and raise a clearer error than the raw client exception."""
     try:
         return client.get_bucket(name)
     except Exception as exc:  # pragma: no cover - surface a clear message
@@ -74,6 +81,7 @@ def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
 
 
 def build_object_name(prefix: str, relative_path: Path) -> str:
+    """Build a stable GCS object name from the local parquet relative path."""
     prefix_clean = prefix.strip("/")
     relative_posix = relative_path.as_posix()
     if prefix_clean:
@@ -82,6 +90,7 @@ def build_object_name(prefix: str, relative_path: Path) -> str:
 
 
 def upload_bronze() -> None:
+    """Upload local parquet files to the Bronze bucket and persist an execution log."""
     bruin_vars = load_bruin_vars()
 
     bronze_bucket_name = bruin_vars.get("bronze_bucket", "ecodatacloud-ds-bronze")
@@ -101,6 +110,7 @@ def upload_bronze() -> None:
 
     run_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     logs: list[dict[str, Any]] = []
+    # Separate counters make the run summary immediately readable in CI/log output.
     uploaded = 0
     skipped = 0
     errored = 0
@@ -110,11 +120,14 @@ def upload_bronze() -> None:
         if max_files is not None and uploaded + skipped + errored >= max_files:
             break
 
+        # Operational logs are kept locally and are not promoted as business datasets.
         if "_logs" in parquet_path.parts:
             skipped += 1
             continue
 
         relative_path = parquet_path.relative_to(parquet_root)
+        # Keep the local folder structure in GCS so downstream steps can infer
+        # the dataset name from the uploaded parquet filename.
         object_name = build_object_name(prefix, relative_path)
         blob = bronze_bucket.blob(object_name)
 

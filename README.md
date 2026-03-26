@@ -161,14 +161,14 @@ It is useful because it:
 For this project, the Makefile plays the role of a lightweight task runner instead of introducing an extra orchestration or scripting layer.
 
 ### <span style="color:#0B2D5C;">**𝙇𝙤𝙤𝙠𝙚𝙧 𝙎𝙩𝙪𝙙𝙞𝙤**</span>
-`Looker Studio` is the planned dashboard layer because it connects easily to BigQuery and is a natural BI choice in a GCP-based project.
+`Looker Studio` is the dashboard layer of the project. It connects directly to BigQuery and is a natural BI choice in a GCP-based architecture.
 
 It is relevant for the final step because:
 - it requires very little setup
-- it supports fast dashboard prototyping
-- it allows the Gold OBT to be consumed directly by business-facing charts
+- it supports fast dashboard creation
+- it allows the Gold OBT to be consumed directly by business-facing charts and comparisons
 
-This makes it a good fit for a student or portfolio-style data project where speed and clarity matter.
+The completed report is documented in `Looker.md` and uses the final `gold__obt` table as its analytical source.
 
 ### <span style="color:#0B2D5C;">**𝘼𝙧𝙘𝙝𝙞𝙩𝙚𝙘𝙩𝙪𝙧𝙚 (𝘽𝙖𝙩𝙘𝙝)**</span>
 1. 𝙀𝙭𝙩𝙧𝙖𝙘𝙩 IMF API data into JSON: `data/raw`
@@ -178,7 +178,7 @@ This makes it a good fit for a student or portfolio-style data project where spe
 5. 𝙍𝙪𝙣 Bruin data quality checks on silver (GCS)
 6. 𝙇𝙤𝙖𝙙 partitioned + clustered gold tables in BigQuery (google-cloud-bigquery)
 7. 𝘽𝙪𝙞𝙡𝙙 the Gold OBT with a Bruin Python asset that executes a BigQuery SQL query
-8. 𝘽𝙪𝙞𝙡𝙙 a dashboard with at least two tiles (planned)
+8. 𝘾𝙤𝙣𝙨𝙪𝙢𝙚 the Gold OBT in the completed Looker Studio dashboard
 
 ### <span style="color:#0B2D5C;">**𝘽𝙖𝙩𝙘𝙝 𝘿𝘼𝙂**</span>
 ```mermaid
@@ -209,7 +209,7 @@ Gold tables are created with partitioning and clustering that match typical upst
 - Batch / orchestration: Bruin orchestrates batch assets; runs are triggered via CLI or Makefile.
 - Data warehouse: BigQuery dataset is provisioned; partitioning/clustering is applied during gold load.
 - Transformations: Bruin-first quality checks; optional SQL models in BigQuery.
-- Dashboard: To be implemented with two tiles after warehouse modeling.
+- Dashboard: A completed Looker Studio report is built on top of `gold__obt` and documented in `Looker.md`.
 - Reproducibility: Makefile and step-by-step instructions are provided below.
 
 | Evaluation criterion | How this project addresses it |
@@ -220,7 +220,7 @@ Gold tables are created with partitioning and clustering that match typical upst
 | Batch / workflow orchestration | The project implements a multi-step batch pipeline from extraction to Gold OBT, documented with a DAG and executable through Bruin + Makefile. |
 | Data warehouse | BigQuery Gold tables are created with explicit partitioning and clustering choices, documented with the rationale. |
 | Transformations | Transformations are implemented with Bruin Python assets and BigQuery SQL. |
-| Dashboard | The project is designed to expose the final Gold OBT to Looker Studio. |
+| Dashboard | The project includes a Looker Studio report built on the final Gold OBT. |
 | Reproducibility | `Setup.md`, `Quickstart.md`, and `Clean Restart` document the full setup and rerun process. |
 
 ## <span style="color:#0B2D5C;">**My project response to the criteria**</span>
@@ -234,8 +234,8 @@ Its strengths are:
 - explicit data quality checks before the Gold layer
 - partitioned and clustered BigQuery tables with documented reasoning
 - reproducible execution instructions, including a full clean restart procedure
-- Using make
-- Using Looker for the report
+- a Make-based execution interface
+- a completed Looker Studio report connected to the final Gold OBT
 
 ---
 
@@ -245,3 +245,4 @@ Its strengths are:
 - [`Quickstart.md#clean-restart`](Quickstart.md#clean-restart): destructive rerun procedure to wipe generated outputs and rebuild the project from scratch.
 - `./data/Dataset.md`: Explain the dataset
 - `./data/Transformations.md`: Explain the changes in the silver layer and in the gold layer
+- `Looker.md`: documents the completed Looker Studio report and its analytical choices

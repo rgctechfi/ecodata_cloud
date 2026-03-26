@@ -1,3 +1,6 @@
+-- One Big Table at the country/year grain used by the Looker dashboard.
+-- countries provides the reference grid and the indicator tables contribute one metric each.
+-- Aliases stay short so the join logic remains readable even with several indicators.
 SELECT
   c.country_label,
   c.year,
@@ -9,6 +12,8 @@ SELECT
   infl.inflation_avg_consumer_percent_change
 
 FROM `ecodatacloud.ecodatacloud_bq_gold.gold__countries` AS c
+-- INNER JOIN is deliberate here: the OBT should expose only fully populated rows,
+-- which avoids partial records with NULL indicators in the business-facing table.
 INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_usd` AS usd 
   ON c.id_countryear = usd.id_countryear
 INNER JOIN `ecodatacloud.ecodatacloud_bq_gold.gold__gdp_per_capita_ppp` AS ppp 
