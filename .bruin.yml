@@ -1,0 +1,8 @@
+environments:
+  default:
+    connections:
+      google_cloud_platform: 
+        - name: "gcp-default"
+          project_id: "ecodatacloud"
+          location: "EU"
+          use_application_default_credentials: true

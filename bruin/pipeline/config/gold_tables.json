@@ -1,0 +1,22 @@
+{
+  "_comment": "Declarative warehouse tuning for the Gold layer. The Python loader reads only the functional keys it knows, so these _comment fields document the intent without changing runtime behavior.",
+  "default": {
+    "_comment": "Default storage strategy applied to every Gold table unless a dataset-specific override is defined below.",
+    "partition_field": "year",
+    "partition_range": {
+      "_comment": "Range partitioning matches the analytical grain of the IMF time-series datasets and keeps year-based scans efficient in BigQuery.",
+      "start": 1980,
+      "end": 2030,
+      "interval": 1
+    },
+    "cluster_fields": ["country"]
+  },
+  "datasets": {
+    "_comment": "Per-dataset overrides keyed by parquet stem / logical dataset name.",
+    "countries": {
+      "_comment": "The countries reference table is a scaffold rather than a time-series fact table, so partitioning is disabled while clustering on country remains useful.",
+      "partition_field": null,
+      "cluster_fields": ["country"]
+    }
+  }
+}

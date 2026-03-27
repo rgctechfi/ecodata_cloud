@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -8,3 +11,35 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environnement
+.env
+
+# Databases
+*.db
+
+# Files
+*.parquet
+*.csv
+logs/runs
+logs/*.log
+*.py[cod]
+terraform.tfstate*
+terraform/*.tfstate*
+
+# Project data (keep docs only)
+data/raw/**
+!data/raw/context.md
+data/parquet/**
+
+# GCP credentials
+**/application_default_credentials.json
+**/credentials*.json
+**/gcp*.json
+**/service-account*.json
+.gcloud/
+.config/gcloud/
+./credentials/
+
+# Testing folder
+TEST/

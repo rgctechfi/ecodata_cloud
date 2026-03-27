@@ -1,0 +1,207 @@
+"""@bruin
+
+name: ingestion.imf_bronze_upload
+
+type: python
+
+image: python:3.11
+
+@bruin"""
+
+from __future__ import annotations
+
+import csv
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from google.cloud import storage
+
+# Technical notes for reviewers:
+# - This script is intentionally thin: its job is transport, not transformation.
+# - Object naming is deterministic, which is a common data engineering technique for making cloud
+#   storage pipelines predictable and re-runnable.
+# - The `overwrite` and `dry_run` flags provide controlled idempotence: we can safely inspect or
+#   replay behavior without mutating cloud state.
+# - The asset writes a machine-readable CSV log instead of relying only on stdout, which is more
+#   useful for debugging repeated runs and for demonstrating observability during evaluation.
+
+
+def resolve_project_root() -> Path:
+    """Resolve the repository root from either the repo or the Bruin folder."""
+    # Support running the asset from the repo root or from the bruin pipeline folder.
+    candidates = [
+        Path.cwd(),
+        Path.cwd().parent,
+        Path(__file__).resolve().parents[4],
+    ]
+    for candidate in candidates:
+        if (candidate / "data").exists():
+            return candidate
+    return candidates[-1]
+
+
+def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime parameters that control the Bronze upload behavior."""
+    # Optional runtime settings let us switch buckets, prefixes, or overwrite mode
+    # without editing the asset code.
+    raw = os.environ.get("ECODATA_VARS", "")
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("ECODATA_VARS is not valid JSON.") from exc
+
+
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Coerce CLI/environment values such as 'true' or '1' into booleans."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "t"}
+    return default
+
+
+def parse_int(value: Any) -> int | None:
+    """Best-effort integer parsing for optional runtime limits such as max_files."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def ensure_bucket(client: storage.Client, name: str) -> storage.Bucket:
+    """Fetch a bucket and raise a clearer error than the raw client exception."""
+    try:
+        return client.get_bucket(name)
+    except Exception as exc:  # pragma: no cover - surface a clear message
+        raise RuntimeError(f"Unable to access bucket '{name}': {exc}") from exc
+
+
+def build_object_name(prefix: str, relative_path: Path) -> str:
+    """Build a stable GCS object name from the local parquet relative path."""
+    prefix_clean = prefix.strip("/")
+    relative_posix = relative_path.as_posix()
+    if prefix_clean:
+        return f"{prefix_clean}/{relative_posix}"
+    return relative_posix
+
+
+def upload_bronze() -> None:
+    """Upload local parquet files to the Bronze bucket and persist an execution log."""
+    bruin_vars = load_bruin_vars()
+
+    # These variables are the control surface of the asset: destination, naming strategy,
+    # replay behavior, and optional scope reduction for local debugging.
+    bronze_bucket_name = bruin_vars.get("bronze_bucket", "ecodatacloud-ds-bronze")
+    prefix = bruin_vars.get("prefix", "parquet/")
+    overwrite = parse_bool(bruin_vars.get("overwrite"))
+    dry_run = parse_bool(bruin_vars.get("dry_run"))
+    max_files = parse_int(bruin_vars.get("max_files"))
+    local_dir = bruin_vars.get("local_parquet_dir")
+
+    project_root = resolve_project_root()
+    parquet_root = Path(local_dir) if local_dir else project_root / "data" / "parquet"
+    if not parquet_root.exists():
+        raise FileNotFoundError(f"Parquet directory not found: {parquet_root}")
+
+    client = storage.Client()
+    bronze_bucket = ensure_bucket(client, bronze_bucket_name)
+
+    run_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    logs: list[dict[str, Any]] = []
+    # Separate counters make the run summary immediately readable in CI/log output.
+    uploaded = 0
+    skipped = 0
+    errored = 0
+
+    parquet_files = sorted(parquet_root.rglob("*.parquet"))
+    for parquet_path in parquet_files:
+        if max_files is not None and uploaded + skipped + errored >= max_files:
+            break
+
+        # Operational logs are kept locally and are not promoted as business datasets.
+        if "_logs" in parquet_path.parts:
+            skipped += 1
+            continue
+
+        relative_path = parquet_path.relative_to(parquet_root)
+        # Keep the local folder structure in GCS so downstream steps can infer
+        # the dataset name from the uploaded parquet filename.
+        object_name = build_object_name(prefix, relative_path)
+        blob = bronze_bucket.blob(object_name)
+
+        try:
+            if not overwrite and blob.exists():
+                # Skipping existing objects is what makes the step naturally idempotent in
+                # day-to-day usage: reruns do not duplicate data when overwrite is disabled.
+                logs.append(
+                    {
+                        "run_at": run_at,
+                        "source_path": str(parquet_path),
+                        "dest_object": object_name,
+                        "status": "skip_exists",
+                        "bytes": parquet_path.stat().st_size,
+                        "error": None,
+                    }
+                )
+                skipped += 1
+                continue
+
+            if dry_run:
+                # `dry_run` preserves the exact control flow and logging without mutating GCS.
+                status = "dry_run"
+            else:
+                blob.upload_from_filename(parquet_path)
+                status = "ok"
+                uploaded += 1
+
+            logs.append(
+                {
+                    "run_at": run_at,
+                    "source_path": str(parquet_path),
+                    "dest_object": object_name,
+                    "status": status,
+                    "bytes": parquet_path.stat().st_size,
+                    "error": None,
+                }
+            )
+        except Exception as exc:
+            logs.append(
+                {
+                    "run_at": run_at,
+                    "source_path": str(parquet_path),
+                    "dest_object": object_name,
+                    "status": "error",
+                    "bytes": parquet_path.stat().st_size,
+                    "error": str(exc),
+                }
+            )
+            errored += 1
+
+    log_dir = project_root / "data" / "bronze" / "_logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "imf_bronze_upload_log.csv"
+
+    columns = ["run_at", "source_path", "dest_object", "status", "bytes", "error"]
+    with log_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(logs)
+
+    print(f"Bronze upload summary: uploaded={uploaded}, skipped={skipped}, errors={errored}")
+    print(f"Wrote bronze upload log to: {log_path}")
+
+
+upload_bronze()

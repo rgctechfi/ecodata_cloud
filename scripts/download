@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+import requests
+
+# OECD SDMX API dataset URL provided by the user
+URL_DATA = (
+    "https://sdmx.oecd.org/public/rest/data/"
+    "OECD.SDD.NAD,DSD_NAAG@DF_NAAG_V,1.0/"
+    "A.DEU+AUT+BEL+CAN+CHL+COL+KOR+CRI+DNK+ESP+EST+USA+FIN+FRA+GRC+HUN+IRL+ISL+ISR+"
+    "ITA+JPN+LVA+LTU+LUX+MEX+NOR+NZL+NLD+POL+PRT+SVK+GBR+SVN+SWE+CHE+CZE+TUR+EA+EU+"
+    "ZAF+BRA+CHN+IND+IDN+RUS+AUS..USD_PPP_PS.?dimensionAtObservation=AllDimensions"
+)
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+OUTPUT_FILENAME = "oecd_naag.csv"
+
+
+def _with_query_param(url: str, key: str, value: str) -> str:
+    parts = urlparse(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    if key not in query:
+        query[key] = value
+    new_query = urlencode(query, doseq=True)
+    return urlunparse(parts._replace(query=new_query))
+
+
+def download_dataset() -> Path:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Ask explicitly for CSV output, while preserving existing query params.
+    url = _with_query_param(URL_DATA, "format", "sdmx-csv")
+    headers = {
+        "Accept": "text/csv, application/vnd.sdmx.data+csv",
+        "User-Agent": "ecodata_cloud-download/1.0",
+    }
+
+    output_path = DATA_DIR / OUTPUT_FILENAME
+    with requests.get(url, headers=headers, stream=True, timeout=120) as response:
+        response.raise_for_status()
+        with open(output_path, "wb") as file_handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    file_handle.write(chunk)
+
+    return output_path
+
+
+def main() -> None:
+    print("Downloading OECD dataset...")
+    output_path = download_dataset()
+    print(f"Saved dataset to: {output_path}")
+
+
+if __name__ == "__main__":
+    main()

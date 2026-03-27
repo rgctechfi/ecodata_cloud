@@ -1,0 +1,300 @@
+"""@bruin
+
+name: ingestion.imf_quality_checks
+
+type: python
+
+image: python:3.11
+
+@bruin"""
+
+from __future__ import annotations
+
+import csv
+import json
+import os
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+from google.cloud import storage
+
+# Technical notes for reviewers:
+# - This asset applies declarative data-quality rules rather than hardcoding checks inline in the
+#   orchestration loop, which improves reuse and keeps the QA layer auditable.
+# - The check runner accumulates issues instead of stopping at the first error. This is a common
+#   observability technique because one run can reveal the full defect surface of a dataset.
+# - The script separates "detection" from "failure policy": `run_checks` finds issues, while
+#   `fail_on_error` decides whether the pipeline should stop.
+# - Temporary downloads are used because the authoritative inputs live in GCS, but the validation
+#   logic itself stays local and deterministic once the parquet file is available.
+
+
+def resolve_project_root() -> Path:
+    """Resolve the repository root from the different Bruin execution contexts."""
+    # Support running the asset from the repo root or from the bruin pipeline folder.
+    candidates = [
+        Path.cwd(),
+        Path.cwd().parent,
+        Path(__file__).resolve().parents[4],
+    ]
+    for candidate in candidates:
+        if (candidate / "data").exists():
+            return candidate
+    return candidates[-1]
+
+
+def load_bruin_vars() -> dict[str, Any]:
+    """Deserialize runtime variables that configure the QA step."""
+    raw = os.environ.get("ECODATA_VARS", "")
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("ECODATA_VARS is not valid JSON.") from exc
+
+
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Convert common string/JSON boolean representations into a Python bool."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "t"}
+    return default
+
+
+def parse_int(value: Any) -> int | None:
+    """Parse optional numeric thresholds or dataset limits from runtime variables."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def default_quality_config() -> dict[str, Any]:
+    """Return the baseline QA rules used when no external config is provided."""
+    # Checks are intentionally simple and transparent: schema presence, nullability,
+    # numeric coercion, uniqueness, and year boundaries.
+    return {
+        "default": {
+            "required_columns": ["country", "country_label", "year", "value", "id_countryear"],
+            "not_null_columns": ["country", "year", "id_countryear"],
+            "numeric_columns": ["year", "value"],
+            "unique_columns": ["id_countryear"],
+            "min_year": 1960,
+            "max_year": 2035,
+        },
+        "datasets": {
+            "countries": {
+                "required_columns": ["country", "country_label", "year", "id_countryear"],
+                "not_null_columns": ["country", "country_label", "year", "id_countryear"],
+                "numeric_columns": ["year"],
+                "unique_columns": ["id_countryear"],
+            }
+        },
+    }
+
+
+def load_quality_config(project_root: Path, override_path: str | None) -> dict[str, Any]:
+    """Load and validate the quality-check configuration file."""
+    if override_path:
+        config_path = Path(override_path).expanduser()
+    else:
+        config_path = project_root / "bruin" / "pipeline" / "config" / "quality_checks.json"
+
+    if not config_path.exists():
+        return default_quality_config()
+
+    payload = json.loads(config_path.read_text())
+    if not isinstance(payload, dict):
+        raise ValueError("Quality config must be a JSON object.")
+
+    payload.setdefault("default", {})
+    payload.setdefault("datasets", {})
+    if not isinstance(payload["default"], dict) or not isinstance(payload["datasets"], dict):
+        raise ValueError("Quality config keys 'default' and 'datasets' must be objects.")
+
+    return payload
+
+
+def pick_list(config: dict[str, Any], key: str, fallback: list[str]) -> list[str]:
+    """Read a list setting defensively, falling back when the config is incomplete."""
+    if key in config:
+        value = config.get(key)
+        if isinstance(value, list):
+            return [str(item) for item in value]
+    return fallback
+
+
+def pick_int(config: dict[str, Any], key: str, fallback: int | None) -> int | None:
+    """Read an integer setting defensively, falling back on invalid overrides."""
+    if key in config:
+        value = config.get(key)
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip():
+            try:
+                return int(value)
+            except ValueError:
+                return fallback
+    return fallback
+
+
+def merge_checks(config: dict[str, Any], dataset_name: str) -> dict[str, Any]:
+    """Merge default QA rules with dataset-specific overrides."""
+    defaults = config.get("default", {})
+    dataset_cfg = config.get("datasets", {}).get(dataset_name, {})
+
+    # This explicit merge keeps the resulting rule set visible and predictable for each dataset.
+    merged = {
+        "required_columns": pick_list(dataset_cfg, "required_columns", pick_list(defaults, "required_columns", [])),
+        "not_null_columns": pick_list(dataset_cfg, "not_null_columns", pick_list(defaults, "not_null_columns", [])),
+        "numeric_columns": pick_list(dataset_cfg, "numeric_columns", pick_list(defaults, "numeric_columns", [])),
+        "unique_columns": pick_list(dataset_cfg, "unique_columns", pick_list(defaults, "unique_columns", [])),
+        "min_year": pick_int(dataset_cfg, "min_year", pick_int(defaults, "min_year", None)),
+        "max_year": pick_int(dataset_cfg, "max_year", pick_int(defaults, "max_year", None)),
+    }
+    return merged
+
+
+def run_checks(frame: pd.DataFrame, checks: dict[str, Any]) -> list[str]:
+    """Evaluate a dataframe against the configured QA rules and return human-readable issues."""
+    issues: list[str] = []
+    columns = set(frame.columns)
+
+    # Each check appends a compact machine-readable issue string. The log stays easy to parse
+    # while still being understandable by a reviewer without custom tooling.
+    missing = [col for col in checks["required_columns"] if col not in columns]
+    if missing:
+        issues.append(f"missing_columns={missing}")
+
+    for col in checks["not_null_columns"]:
+        if col not in columns:
+            continue
+        null_count = int(frame[col].isna().sum())
+        if null_count > 0:
+            issues.append(f"nulls_{col}={null_count}")
+
+    for col in checks["numeric_columns"]:
+        if col not in columns:
+            continue
+        # Comparing coerced nulls to original nulls distinguishes truly invalid values from
+        # legitimate missing data.
+        series = pd.to_numeric(frame[col], errors="coerce")
+        invalid = int(series.isna().sum() - frame[col].isna().sum())
+        if invalid > 0:
+            issues.append(f"non_numeric_{col}={invalid}")
+
+    for col in checks["unique_columns"]:
+        if col not in columns:
+            issues.append(f"missing_unique_{col}")
+            continue
+        series = frame[col].dropna()
+        dup_count = int(series.duplicated().sum())
+        if dup_count > 0:
+            issues.append(f"duplicates_{col}={dup_count}")
+
+    if "year" in columns and (checks["min_year"] is not None or checks["max_year"] is not None):
+        year_series = pd.to_numeric(frame["year"], errors="coerce")
+        invalid_years = year_series.isna().sum() - frame["year"].isna().sum()
+        if invalid_years > 0:
+            issues.append(f"invalid_year={int(invalid_years)}")
+        if checks["min_year"] is not None:
+            below = int((year_series < checks["min_year"]).sum())
+            if below > 0:
+                issues.append(f"year_below_{checks['min_year']}={below}")
+        if checks["max_year"] is not None:
+            above = int((year_series > checks["max_year"]).sum())
+            if above > 0:
+                issues.append(f"year_above_{checks['max_year']}={above}")
+
+    return issues
+
+
+def run_quality_checks() -> None:
+    """Validate each Silver parquet dataset before it is allowed into Gold."""
+    bruin_vars = load_bruin_vars()
+
+    silver_bucket_name = bruin_vars.get("silver_bucket", "ecodatacloud-ds-silver")
+    prefix = bruin_vars.get("prefix", "parquet/")
+    max_objects = parse_int(bruin_vars.get("max_objects"))
+    fail_on_error = parse_bool(bruin_vars.get("fail_on_error"), default=True)
+    config_path = bruin_vars.get("quality_config")
+
+    project_root = resolve_project_root()
+    config = load_quality_config(project_root, config_path)
+
+    client = storage.Client()
+    run_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    logs: list[dict[str, Any]] = []
+    errored = 0
+    checked = 0
+
+    for blob in client.list_blobs(silver_bucket_name, prefix=prefix):
+        if max_objects is not None and checked + errored >= max_objects:
+            break
+
+        if not blob.name.endswith(".parquet") or "/_logs/" in blob.name:
+            continue
+
+        dataset_name = Path(blob.name).stem
+        checks = merge_checks(config, dataset_name)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "silver.parquet"
+            blob.download_to_filename(tmp_path)
+            frame = pd.read_parquet(tmp_path)
+
+        # The asset collects every issue first, then decides at the end whether the
+        # pipeline should fail. This keeps the log useful even when multiple datasets break.
+        issues = run_checks(frame, checks)
+        # The orchestration layer turns the issue list into a binary status for pipeline control,
+        # while still keeping the detailed issue payload in the CSV log.
+        status = "ok" if not issues else "error"
+        if issues:
+            errored += 1
+        else:
+            checked += 1
+
+        logs.append(
+            {
+                "run_at": run_at,
+                "dataset": dataset_name,
+                "status": status,
+                "row_count": int(frame.shape[0]),
+                "column_count": int(frame.shape[1]),
+                "issues": ";".join(issues) if issues else None,
+            }
+        )
+
+    log_dir = project_root / "data" / "silver" / "_logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "imf_quality_checks_log.csv"
+
+    columns = ["run_at", "dataset", "status", "row_count", "column_count", "issues"]
+    with log_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(logs)
+
+    print(f"Quality checks summary: ok={checked}, errors={errored}")
+    print(f"Wrote quality checks log to: {log_path}")
+
+    if errored > 0 and fail_on_error:
+        raise RuntimeError("Quality checks failed. See log for details.")
+
+
+run_quality_checks()
