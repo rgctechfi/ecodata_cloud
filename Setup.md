@@ -9,7 +9,8 @@ This guide covers the full environment setup, GCP/IAM, and infrastructure provis
 2. 𝙂𝙤𝙤𝙜𝙡𝙚 𝘾𝙡𝙤𝙪𝙙 𝘾𝙇𝙄 (`gcloud`)
 3. 𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢
 4. 𝘽𝙧𝙪𝙞𝙣 𝘾𝙇𝙄
-5. 𝙋𝙮𝙩𝙝𝙤𝙣 (optional, only if you want to open the notebook)
+5. `make`
+6. 𝙋𝙮𝙩𝙝𝙤𝙣 (optional, only if you want to open the notebook)
 
 ## <span style="color:#0B2D5C;">**𝙐𝙑 𝙀𝙣𝙫𝙞𝙧𝙤𝙣𝙢𝙚𝙣𝙩 (𝙊𝙥𝙩𝙞𝙤𝙣𝙖𝙡)**</span>
 Use `uv` for local development only (Bruin installs its own dependencies per asset):
@@ -40,6 +41,11 @@ User/Owner account (used to run Terraform and manage project resources): `roles/
 
 Service account `bruin-ingestor@ecodatacloud.iam.gserviceaccount.com` is provisioned by Terraform for the project, but it is **not** the credential used by local Bruin runs unless you explicitly wire it into the runtime yourself.
 
+Important implementation detail:
+- the repository does **not** rely on manual `gcloud iam service-accounts create` or `gcloud projects add-iam-policy-binding` commands
+- the `bruin-ingestor` service account and its IAM bindings are created declaratively by Terraform in [main.tf](/Users/rgctechfi/Projects/ecodata_cloud/terraform/main.tf)
+- in practice, running `terraform apply` or `make provision` is the documented way to create the service account and apply IAM roles in this project
+
 Terraform currently grants this service account:
 - `roles/storage.admin`
 - `roles/storage.objectAdmin`
@@ -68,12 +74,14 @@ GCS buckets require an active billing account. If you see:
 then link a billing account and re-run Terraform.
 
 ## <span style="color:#0B2D5C;">**𝙋𝙧𝙤𝙫𝙞𝙨𝙞𝙤𝙣 𝙄𝙣𝙛𝙧𝙖𝙨𝙩𝙧𝙪𝙘𝙩𝙪𝙧𝙚 (𝙏𝙚𝙧𝙧𝙖𝙛𝙤𝙧𝙢)**</span>
+This section explains the infrastructure bootstrap logic. The runnable end-to-end execution order remains documented in [Quickstart.md](/Users/rgctechfi/Projects/ecodata_cloud/Quickstart.md).
+
 1. 𝙘𝙙 `terraform`
 2. 𝙧𝙪𝙣 `terraform init`
 3. 𝙧𝙪𝙣 `terraform plan`
 4. 𝙧𝙪𝙣 `terraform apply`
 
-Alternative: `make provision` runs `terraform init` + `terraform plan` + `terraform apply`.
+Alternative: `make provision` runs `auth-check` + `terraform init` + `terraform plan` + `terraform apply`.
 
 This creates:
 1. Service account `bruin-ingestor`

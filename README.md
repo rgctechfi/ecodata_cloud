@@ -7,6 +7,16 @@
   <img src="./ressources/pictures/fmi_logo.jpg" alt="IMF logo" width="400" />
 </p>
 
+
+## <span style="color:#0B2D5C;">**Summary**</span>
+- [`README.md`](README.md): project entry point, high-level overview, architecture, tool choices, evaluation mapping, and links to the detailed project documentation
+- [`Setup.md`](Setup.md): environment setup, GCP/IAM, and infrastructure provisioning
+- [`Quickstart.md`](Quickstart.md): two complete execution paths (manual shell or Makefile) to run the pipeline end to end
+- [`Quickstart.md#clean-restart`](Quickstart.md#clean-restart): destructive rebuild procedure to wipe generated outputs and recreate the project from scratch
+- [`data/Dataset.md`](data/Dataset.md): source dataset description and IMF indicator scope
+- [`data/Transformations.md`](data/Transformations.md): Silver and Gold transformation logic, including the OBT design
+- [`Looker.md`](Looker.md): completed Looker Studio report, visuals, and analytical choices
+
 ## <span style="color:#0B2D5C;">**𝙊𝙫𝙚𝙧𝙫𝙞𝙚𝙬**</span>
 This project builds a reproducible batch data pipeline around IMF DataMapper indicators. It collects country-level macroeconomic data, stores it in a cloud lakehouse-style architecture, and prepares a final analytical table for dashboarding.
 
@@ -241,10 +251,3 @@ Its strengths are:
 
 ---
 
-## <span style="color:#0B2D5C;">**𝘿𝙤𝙘𝙨**</span>
-- [`Setup.md`](Setup.md): environment setup, GCP/IAM, and infrastructure provisioning
-- [`Quickstart.md`](Quickstart.md): two complete execution paths (manual shell or Makefile) to run the pipeline end to end
-- [`Quickstart.md#clean-restart`](Quickstart.md#clean-restart): destructive rebuild procedure to wipe generated outputs and recreate the project from scratch
-- [`data/Dataset.md`](data/Dataset.md): source dataset description and IMF indicator scope
-- [`data/Transformations.md`](data/Transformations.md): Silver and Gold transformation logic, including the OBT design
-- [`Looker.md`](Looker.md): completed Looker Studio report, visuals, and analytical choices

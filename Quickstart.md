@@ -8,7 +8,7 @@ This guide shows two complete paths (manual bash or Makefile) to run the pipelin
 Make sure the environment and infrastructure are ready by following `Setup.md` (GCP/IAM + Terraform + auth).
 
 Essential prerequisites to avoid getting blocked after a fresh clone:
-- Install `gcloud`, `terraform`, and the `Bruin CLI`.
+- Install `gcloud`, `terraform`, `make`, and the `Bruin CLI`.
 - Make sure `.bruin.yml` is present in the repo root.
 - Have access to a GCP project with billing enabled.
 - If you run Terraform, use an account with enough permissions to create buckets, dataset, service account, and IAM bindings.
@@ -54,6 +54,8 @@ terraform -chdir=terraform plan
 terraform -chdir=terraform apply
 ```
 
+These commands create the `bruin-ingestor` service account, apply its IAM bindings, create the Bronze/Silver buckets, and create the BigQuery dataset through Terraform. There are no separate manual `gcloud` commands to create the service account in this project.
+
 2. Run the ingestion pipeline up to Silver:
 ```bash
 bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py
@@ -80,6 +82,8 @@ make full
 ```
 
 `make full` already includes `make provision`, so you do not need to run infrastructure provisioning separately in the normal end-to-end path.
+
+`make provision` is the Makefile equivalent of the Terraform bootstrap and is the command that creates `bruin-ingestor`, the IAM bindings, the buckets, and the BigQuery dataset.
 
 2. Validate Silver:
 ```bash
@@ -159,7 +163,7 @@ FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
 
 ## <span style="color:#0B2D5C;">**𝙈𝙖𝙠𝙚𝙛𝙞𝙡𝙚 𝙏𝙖𝙧𝙜𝙚𝙩𝙨**</span>
 - `make auth-check`: verify gcloud auth using ADC or a repo-local service account key
-- `make provision`: Terraform init + plan + apply
+- `make provision`: auth-check + Terraform init + plan + apply
 - `make bruin-extract`: IMF API extraction to JSON
 - `make bruin-convert`: JSON to Parquet conversion
 - `make ingest-bronze`: upload Parquet to bronze bucket
@@ -173,7 +177,7 @@ FROM `ecodatacloud.ecodatacloud_bq_gold.gold__obt`'
 
 ## <span style="color:#0B2D5C;">**𝙏𝙤𝙤𝙡 𝙀𝙦𝙪𝙞𝙫𝙖𝙡𝙚𝙣𝙩𝙨**</span>
 - `make auth-check` → validates either `GOOGLE_APPLICATION_CREDENTIALS` or user ADC, then checks the active GCP project
-- `make provision` → `terraform -chdir=terraform init` + `terraform -chdir=terraform plan` + `terraform -chdir=terraform apply`
+- `make provision` → `make auth-check` + `terraform -chdir=terraform init` + `terraform -chdir=terraform plan` + `terraform -chdir=terraform apply`
 - `make bruin-extract` → `bruin run bruin/pipeline/assets/ingestion/imf_api_extract.py`
 - `make bruin-convert` → `bruin run bruin/pipeline/assets/ingestion/imf_json_to_parquet.py`
 - `make ingest-bronze` → `bruin run bruin/pipeline/assets/ingestion/imf_bronze_upload.py`
